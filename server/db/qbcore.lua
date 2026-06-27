@@ -1,0 +1,1 @@
+return Bridge._loadModule('server/db/qbox.lua')
