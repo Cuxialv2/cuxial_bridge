@@ -41,13 +41,13 @@ function Bridge.GetGang()
 end
 
 function Bridge.OnPlayerLoaded(cb)
-    AddEventHandler('esx:playerLoaded', function() cb(Bridge.GetPlayerData()) end)
+    RegisterNetEvent('esx:playerLoaded', function() cb(Bridge.GetPlayerData()) end)
 end
 function Bridge.OnPlayerUnload(cb)
-    AddEventHandler('esx:onPlayerLogout', function() cb() end)
+    RegisterNetEvent('esx:onPlayerLogout', function() cb() end)
 end
 function Bridge.OnJobUpdate(cb)
-    AddEventHandler('esx:setJob', function(job) cb(normalizeJob(job)) end)
+    RegisterNetEvent('esx:setJob', function(job) cb(normalizeJob(job)) end)
 end
 function Bridge.OnGangUpdate(_)
 

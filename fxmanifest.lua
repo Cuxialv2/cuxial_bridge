@@ -5,7 +5,7 @@ lua54 'yes'
 name 'cuxial_bridge'
 author 'Cuxial'
 description 'Capa de compatibilidad multi-framework (qbox / qbcore / esx) para todos los scripts Cuxial'
-version '2.5.0'
+version '2.5.1'
 
 server_script 'init.lua'
 

@@ -50,15 +50,15 @@ function Bridge.GetGang()
 end
 
 function Bridge.OnPlayerLoaded(cb)
-    AddEventHandler('QBCore:Client:OnPlayerLoaded', function() cb(Bridge.GetPlayerData()) end)
+    RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function() cb(Bridge.GetPlayerData()) end)
 end
 function Bridge.OnPlayerUnload(cb)
-    AddEventHandler('QBCore:Client:OnPlayerUnload', function() cb() end)
+    RegisterNetEvent('QBCore:Client:OnPlayerUnload', function() cb() end)
 end
 function Bridge.OnJobUpdate(cb)
-    AddEventHandler('QBCore:Client:OnJobUpdate', function(job) cb(normalizeJob(job)) end)
+    RegisterNetEvent('QBCore:Client:OnJobUpdate', function(job) cb(normalizeJob(job)) end)
 end
 function Bridge.OnGangUpdate(cb)
-    AddEventHandler('QBCore:Client:OnGangUpdate', function(gang) cb(normalizeGang(gang)) end)
+    RegisterNetEvent('QBCore:Client:OnGangUpdate', function(gang) cb(normalizeGang(gang)) end)
 end
 
