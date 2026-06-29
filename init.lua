@@ -29,6 +29,8 @@ loadModule(context .. '/adapters/' .. Bridge.framework .. '.lua')
 
 loadModule(context .. '/inventory/' .. Bridge.inventory .. '.lua')
 
+loadModule(context .. '/zones.lua')
+
 if context == 'server' then
     loadModule('server/vehicles/' .. Bridge.framework .. '.lua')
     loadModule('server/db/' .. Bridge.framework .. '.lua')
