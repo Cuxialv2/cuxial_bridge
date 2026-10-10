@@ -7,7 +7,8 @@ end
 
 local CONTRACT = {
     'GetPlayerData', 'IsLoggedIn', 'GetJob', 'GetJobInfo', 'GetGang',
-    'OnPlayerLoaded', 'OnPlayerUnload', 'OnJobUpdate', 'OnGangUpdate',
+    'OnPlayerLoaded', 'OnPlayerUnload', 'OnPlayerLoggedOut', 'OnJobUpdate', 'OnGangUpdate',
+    'AnnouncePlayerLoaded', 'UsesStartingApartment',
 }
 for _, fn in ipairs(CONTRACT) do
     Bridge[fn] = notImplemented(fn)

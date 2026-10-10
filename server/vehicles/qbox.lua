@@ -9,6 +9,33 @@ function V.GetPlayerVehicles(filter)
     return veh:GetPlayerVehicles(filter)
 end
 
+---@param ids integer[]
+---@return table[]
+function V.GetPlayerVehiclesByIds(ids)
+    if type(ids) ~= 'table' or #ids == 0 then return {} end
+    local placeholders = ('?,'):rep(#ids):sub(1, -2)
+    local rows = MySQL.query.await(
+        ('SELECT id, citizenid, vehicle, mods, garage, state, depotprice, plate FROM player_vehicles WHERE id IN (%s)'):format(placeholders),
+        ids) or {}
+    local out = {}
+    for i = 1, #rows do
+        local r = rows[i]
+        local ok, props = pcall(json.decode, r.mods or '')
+        props = (ok and type(props) == 'table') and props or {}
+        if not props.plate and r.plate then props.plate = r.plate end
+        out[i] = {
+            id = r.id,
+            citizenid = r.citizenid,
+            modelName = r.vehicle,
+            props = props,
+            garage = r.garage,
+            state = r.state,
+            depotPrice = r.depotprice,
+        }
+    end
+    return out
+end
+
 function V.GetVehicleIdByPlate(plate)
     return veh:GetVehicleIdByPlate(plate)
 end
@@ -76,7 +103,6 @@ function V.SetStateDepotPrice(id, state, depotPrice)
     MySQL.update.await('UPDATE player_vehicles SET state = ?, depotPrice = ? WHERE id = ?', { state, depotPrice, id })
 end
 
---- @return table<string, integer>  conteo de vehículos por garaje
 function V.CountByGarage()
     local rows = MySQL.query.await('SELECT garage, COUNT(*) AS n FROM player_vehicles WHERE garage IS NOT NULL GROUP BY garage') or {}
     local out = {}
@@ -84,8 +110,6 @@ function V.CountByGarage()
     return out
 end
 
---- @param ids integer[]
---- @return table<integer, number>
 function V.MileageFor(ids)
     local out = {}
     if not ids or #ids == 0 then return out end
@@ -96,8 +120,6 @@ function V.MileageFor(ids)
     return out
 end
 
---- @param opts { search?: string, page?: integer, perPage?: integer }
---- @return { rows: table[], total: integer, page: integer, pages: integer, perPage: integer }
 function V.AdminList(opts)
     opts = opts or {}
     local perPage = tonumber(opts.perPage) or 50
@@ -139,5 +161,44 @@ function V.AdminList(opts)
     return { rows = out, total = total, page = page, pages = pages, perPage = perPage }
 end
 
-Bridge.Vehicles = V
+---@param raw any  columna JSON trunk/glovebox
+---@return table[]
+local function decodeStorage(raw)
+    if type(raw) == 'string' and raw ~= '' then
+        local ok, decoded = pcall(json.decode, raw)
+        raw = ok and decoded or nil
+    end
+    if type(raw) ~= 'table' then return {} end
+    local out = {}
+    for _, item in pairs(raw) do
+        if type(item) == 'table' and item.name then
+            out[#out + 1] = {
+                name = item.name,
+                count = tonumber(item.count or item.amount) or 0,
+                slot = item.slot,
+                metadata = type(item.metadata) == 'table' and item.metadata or (type(item.info) == 'table' and item.info or {}),
+            }
+        end
+    end
+    return out
+end
 
+---@param identifier string
+---@return { id: integer, plate: string, vehicle: string, trunk: table[], glovebox: table[] }[]
+function V.GetStorageByOwner(identifier)
+    if type(identifier) ~= 'string' or identifier == '' then return {} end
+    local ok, rows = pcall(MySQL.query.await,
+        'SELECT id, plate, vehicle, trunk, glovebox FROM player_vehicles WHERE citizenid = ?', { identifier })
+    if not ok or not rows then return {} end
+    local out = {}
+    for i = 1, #rows do
+        local r = rows[i]
+        out[i] = {
+            id = r.id, plate = r.plate, vehicle = r.vehicle,
+            trunk = decodeStorage(r.trunk), glovebox = decodeStorage(r.glovebox),
+        }
+    end
+    return out
+end
+
+Bridge.Vehicles = V

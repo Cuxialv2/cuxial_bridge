@@ -76,9 +76,21 @@ function Target.addBoxZone(params)
     return name
 end
 
+---@param coords vector3
+---@param options table[]
+---@return string zoneId
+function Target.addPoint(coords, options)
+    return Target.addBoxZone({ coords = coords, size = vec3(0.8, 0.8, 0.8), options = options })
+end
+
 ---@param id string
 function Target.removeZone(id)
     qb:RemoveZone(id)
+end
+
+---@param state boolean  true = sin interacción (menús a pantalla completa, minijuegos…)
+function Target.disable(state)
+    qb:AllowTargeting(state ~= true)
 end
 
 Bridge.Target = Target

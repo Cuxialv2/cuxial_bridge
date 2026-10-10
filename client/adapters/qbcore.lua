@@ -62,3 +62,16 @@ function Bridge.OnGangUpdate(cb)
     RegisterNetEvent('QBCore:Client:OnGangUpdate', function(gang) cb(normalizeGang(gang)) end)
 end
 
+function Bridge.OnPlayerLoggedOut(cb)
+    RegisterNetEvent('QBCore:Client:OnPlayerUnload', function() cb() end)
+end
+
+function Bridge.AnnouncePlayerLoaded()
+    TriggerServerEvent('QBCore:Server:OnPlayerLoaded')
+    TriggerEvent('QBCore:Client:OnPlayerLoaded')
+end
+
+---@return boolean
+function Bridge.UsesStartingApartment()
+    return false
+end

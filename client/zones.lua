@@ -90,7 +90,20 @@ function Freecam:update()
     self:setPos(self.pos + self.vecX * moveX * s + self.vecY * -moveY * s + vec3(0, 0, moveZ * s))
 end
 
-local Builder = { points = {}, minZ = 0, maxZ = 0, active = false, cb = nil }
+local Builder = { points = {}, minZ = 0, maxZ = 0, active = false, cb = nil, opts = nil }
+
+local function notifyUpdate()
+    local opts = Builder.opts
+    if not opts or not opts.onUpdate then return end
+    local copy = {}
+    for i, p in ipairs(Builder.points) do copy[i] = { x = p.x, y = p.y, z = p.z } end
+    opts.onUpdate(copy)
+end
+
+local function notifyHeight()
+    local opts = Builder.opts
+    if opts and opts.onHeight then opts.onHeight(Builder.minZ, Builder.maxZ) end
+end
 
 local function renderPoly()
     local pts = Builder.points
@@ -120,8 +133,10 @@ local function finish()
         points[#points + 1] = { x = p.x, y = p.y, z = Builder.minZ }
     end
     local cb = Builder.cb
+
+    local camPos, camRot = Freecam.pos, Freecam.rot
     Builder:cleanup()
-    if cb then cb({ type = 'poly', points = points, thickness = thickness }) end
+    if cb then cb({ type = 'poly', points = points, thickness = thickness, camPos = camPos, camRot = camRot }) end
 end
 
 local function cancel()
@@ -133,19 +148,31 @@ end
 function Builder:cleanup()
     Freecam:stop()
     self.active, self.points, self.minZ, self.maxZ, self.cb = false, {}, 0, 0, nil
+    self.opts = nil
     lib.hideTextUI()
 end
 
----@param opts? table  reservado para futuras opciones
+---@param opts? { silent?: boolean, startHeight?: number, onUpdate?: fun(points: table[]), onHeight?: fun(minZ: number, maxZ: number) }
 ---@param cb fun(geometry: table|nil)  recibe la geometría, o nil si se cancela
 function Z.OpenCreator(opts, cb)
     if Builder.active then return end
+    opts = opts or {}
+
     local coords = GetEntityCoords(cache.ped)
-    Builder.points, Builder.minZ, Builder.maxZ, Builder.cb, Builder.active = {}, coords.z, coords.z + 5, cb, true
+    Builder.points, Builder.minZ = {}, coords.z
+    Builder.maxZ = coords.z + (tonumber(opts.startHeight) or 5)
+    Builder.cb, Builder.opts, Builder.active = cb, opts, true
+
     Freecam:start()
-    lib.showTextUI(
-        '[Mouse Izq] Punto  \n[Mouse Der] Deshacer  \n[Flechas/Scroll] Altura  \n[Enter] Guardar  \n[Backspace] Cancelar',
-        { position = 'left-center' })
+
+    if not opts.silent then
+        lib.showTextUI(
+            '[Mouse Izq] Punto  \n[Mouse Der] Deshacer  \n[Flechas/Scroll] Altura  \n[Enter] Guardar  \n[Backspace] Cancelar',
+            { position = 'left-center' })
+    end
+
+    notifyUpdate()
+    notifyHeight()
 
     CreateThread(function()
         while Builder.active do
@@ -158,15 +185,22 @@ function Z.OpenCreator(opts, cb)
                 if IsDisabledControlJustPressed(0, 24) then
                     Builder.minZ = hitCoords.z
                     Builder.points[#Builder.points + 1] = vec3(hitCoords.x, hitCoords.y, hitCoords.z)
+                    notifyUpdate()
+                    notifyHeight()
                 end
             end
             if IsDisabledControlJustPressed(0, 25) and #Builder.points > 0 then
                 Builder.points[#Builder.points] = nil
+                notifyUpdate()
             end
+
+            local heightChanged = true
             if IsDisabledControlJustPressed(0, 181) then Builder.maxZ = Builder.maxZ + 1
             elseif IsDisabledControlJustPressed(0, 180) then Builder.maxZ = Builder.maxZ - 1
-            elseif IsDisabledControlJustPressed(0, 172) then Builder.maxZ = Builder.maxZ + 1
-            elseif IsDisabledControlJustPressed(0, 173) then Builder.minZ = Builder.minZ - 1 end
+            elseif IsDisabledControlJustPressed(0, 172) then Builder.minZ = Builder.minZ + 1
+            elseif IsDisabledControlJustPressed(0, 173) then Builder.minZ = Builder.minZ - 1
+            else heightChanged = false end
+            if heightChanged then notifyHeight() end
             if IsDisabledControlJustPressed(0, 191) then finish()
             elseif IsDisabledControlJustPressed(0, 194) then cancel() end
             for i = 1, #DISABLED do DisableControlAction(0, DISABLED[i], true) end
@@ -176,6 +210,53 @@ function Z.OpenCreator(opts, cb)
 end
 
 function Z.IsCreating() return Builder.active end
+
+---@param opts? { startPos?: vector3, startRot?: vector3, label?: string }
+---@param cb fun(point: vector3|nil)
+function Z.OpenPointPicker(opts, cb)
+    if Builder.active then return end
+    opts = opts or {}
+    Builder.active = true
+    Freecam:start()
+    if opts.startPos then Freecam:setPos(opts.startPos) end
+    if opts.startRot then Freecam:setRot(opts.startRot) end
+    lib.showTextUI(
+        ('[Mouse Izq] %s  \n[Enter] Confirmar  \n[Backspace] Cancelar'):format(opts.label or 'Colocar punto'),
+        { position = 'left-center' })
+
+    local chosen = nil
+    CreateThread(function()
+        while Builder.active do
+            Freecam:update()
+            local hit, hitCoords = raycast(Freecam.pos)
+            if hit then
+                DrawMarker(28, hitCoords.x, hitCoords.y, hitCoords.z, 0, 0, 0, 0, 180, 0, 0.5, 0.5, 0.5, 0, 195, 255, 200,
+                    false, true, 2, nil, nil, false)
+                if IsDisabledControlJustPressed(0, 24) then
+                    chosen = hitCoords
+                end
+            end
+            if chosen then
+                DrawMarker(1, chosen.x, chosen.y, chosen.z, 0, 0, 0, 0, 0, 0, 0.8, 0.8, 60.0,
+                    WALL.r, WALL.g, WALL.b, 90, false, false, 2, nil, nil, false)
+                DrawMarker(28, chosen.x, chosen.y, chosen.z + 0.4, 0, 0, 0, 0, 180, 0, 0.6, 0.6, 0.6,
+                    WALL.r, WALL.g, WALL.b, 220, true, true, 2, nil, nil, false)
+            end
+            if IsDisabledControlJustPressed(0, 191) and chosen then
+                local point = chosen
+                Builder:cleanup()
+                if cb then cb(point) end
+                return
+            elseif IsDisabledControlJustPressed(0, 194) then
+                Builder:cleanup()
+                if cb then cb(nil) end
+                return
+            end
+            for i = 1, #DISABLED do DisableControlAction(0, DISABLED[i], true) end
+            Wait(0)
+        end
+    end)
+end
 
 AddEventHandler('onResourceStop', function(res)
     if GetCurrentResourceName() == res and Builder.active then Builder:cleanup() end

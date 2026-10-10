@@ -71,7 +71,6 @@ function Bridge.GetOfflinePlayer(cid)
 end
 function Bridge.GetPlayers() return QBCore.Functions.GetQBPlayers() end
 function Bridge.GetSource(identifier)
-
     return QBCore.Functions.GetSource(identifier)
 end
 function Bridge.GetIdentifier(src)
@@ -101,6 +100,24 @@ function Bridge.GetMoneyOffline(identifier, account)
     local row = MySQL.single.await(
         ("SELECT JSON_EXTRACT(money, '$.%s') AS v FROM players WHERE citizenid = ?"):format(k), { identifier })
     return row and tonumber(row.v) or 0
+end
+
+---@param identifier string
+---@return table<string, number>
+function Bridge.GetAllMoneyOffline(identifier)
+    local out = {}
+    if type(identifier) ~= 'string' or identifier == '' then return out end
+    local rows = MySQL.query.await('SELECT money FROM players WHERE citizenid = ? LIMIT 1', { identifier })
+    local raw = rows and rows[1] and rows[1].money
+    if type(raw) == 'string' then
+        local ok, decoded = pcall(json.decode, raw)
+        raw = ok and decoded or nil
+    end
+    if type(raw) ~= 'table' then return out end
+    for account, amount in pairs(raw) do
+        out[account] = tonumber(amount) or 0
+    end
+    return out
 end
 
 function Bridge.AddMoneyOffline(identifier, account, amount, _reason)
@@ -139,9 +156,10 @@ function Bridge.GetJobs()
 end
 
 function Bridge.SetJob(src, name, grade)
-    local p = QBCore.Functions.GetPlayer(src)
+    local p = QBCore.Functions.GetPlayerByCitizenId(src)
     return p and p.Functions.SetJob(name, grade or 0) or false
 end
+
 function Bridge.SetDuty(src, onDuty)
     local p = QBCore.Functions.GetPlayer(src)
     if not p then return false end
@@ -251,6 +269,13 @@ function Bridge.OnPlayerLoaded(cb)
     end)
 end
 
+function Bridge.OnCharacterLoaded(cb)
+    AddEventHandler('QBCore:Server:PlayerLoaded', function(player)
+        local src = type(player) == 'table' and player.PlayerData and player.PlayerData.source
+        if type(src) == 'number' then cb(src) end
+    end)
+end
+
 function Bridge.OnPlayerUnload(cb)
     AddEventHandler('QBCore:Server:OnPlayerUnload', function(src)
         cb(src)
@@ -260,6 +285,12 @@ end
 function Bridge.OnJobUpdate(cb)
     AddEventHandler('QBCore:Server:OnJobUpdate', function(src, job)
         cb(src, job)
+    end)
+end
+
+function Bridge.OnGangUpdate(cb)
+    AddEventHandler('QBCore:Server:OnGangUpdate', function(src, gang)
+        cb(src, gang)
     end)
 end
 
@@ -279,3 +310,86 @@ function Bridge.GetVehiclesByHash(hash)
     return nil
 end
 
+---@return table<string, table>
+function Bridge.GetGangs()
+    return QBCore.Shared.Gangs or {}
+end
+
+---@return table<string, table>
+function Bridge.GetVehicleModels()
+    return QBCore.Shared.Vehicles or {}
+end
+
+---@param citizenid string
+---@return number?
+function Bridge.GetSourceByCitizenId(citizenid)
+    if not citizenid then return nil end
+
+    local p = QBCore.Functions.GetPlayerByCitizenId(citizenid)
+    local src = p and p.PlayerData and p.PlayerData.source
+
+    return (type(src) == 'number' and src > 0) and src or nil
+end
+
+---@param citizenid string
+---@return boolean gone
+local function awaitDeleted(citizenid)
+    local deadline = GetGameTimer() + 5000
+    while GetGameTimer() < deadline do
+        if not Bridge.GetOfflinePlayer(citizenid) then return true end
+        Wait(100)
+    end
+    return false
+end
+
+---@param citizenid string
+---@return boolean
+function Bridge.DeleteCharacter(citizenid)
+    if not citizenid or citizenid == '' then return false end
+
+    local remove = QBCore.Player.ForceDeleteCharacter
+    if type(remove) ~= 'function' then return false end
+
+    remove(citizenid)
+    return awaitDeleted(citizenid)
+end
+
+---@param src number
+---@param citizenid? string
+---@param newData? table
+---@return boolean
+function Bridge.Login(src, citizenid, newData)
+    if type(src) ~= 'number' or src <= 0 then return false end
+    return QBCore.Player.Login(src, citizenid, newData) == true
+end
+
+---@param src number
+function Bridge.Logout(src)
+    if type(src) ~= 'number' or src <= 0 then return end
+    QBCore.Player.Logout(src)
+end
+
+---@param src number
+---@return table[]
+function Bridge.GetCharacters(src)
+    local license2 = GetPlayerIdentifierByType(src, 'license2')
+    local license = GetPlayerIdentifierByType(src, 'license')
+    if not license2 and not license then return {} end
+
+    local rows = MySQL.query.await([[
+        SELECT citizenid, cid, charinfo, money, job, gang, position, metadata
+        FROM players WHERE license = ? OR license = ? ORDER BY cid
+    ]], { license2 or '', license or '' }) or {}
+
+    for i = 1, #rows do
+        local row = rows[i]
+        row.charinfo = decodeJson(row.charinfo) or {}
+        row.money = decodeJson(row.money) or {}
+        row.job = decodeJson(row.job)
+        row.gang = decodeJson(row.gang)
+        row.position = decodeJson(row.position)
+        row.metadata = decodeJson(row.metadata) or {}
+    end
+
+    return rows
+end

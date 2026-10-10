@@ -41,6 +41,8 @@ local forcedTarget = GetConvar('cuxial_bridge:target', 'auto')
 local target
 if forcedTarget ~= 'auto' then
     target = forcedTarget
+elseif isUp('sleepless_interact') then
+    target = 'sleepless_interact'
 elseif isUp('ox_target') then
     target = 'ox_target'
 elseif isUp('qb-target') then
@@ -54,4 +56,3 @@ Bridge.target = target
 function Bridge.is(fw) return Bridge.framework == fw end
 function Bridge.usesInventory(inv) return Bridge.inventory == inv end
 function Bridge.usesTarget(t) return Bridge.target == t end
-

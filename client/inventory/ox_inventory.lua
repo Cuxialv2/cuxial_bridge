@@ -25,5 +25,10 @@ function I.openNearbyInventory(...)
     return inv:openNearbyInventory(...)
 end
 
-Bridge.Inventory = I
+---@param invType string
+---@param data any  id del stash, matricula del vehiculo, etc.
+function I.openInventory(invType, data)
+    return inv:openInventory(invType, data)
+end
 
+Bridge.Inventory = I

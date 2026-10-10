@@ -57,3 +57,14 @@ RegisterNetEvent('cuxial_bridge:internal:setDead', function(isDown)
     if ESX.SetPlayerData then ESX.SetPlayerData('dead', isDown == true) end
 end)
 
+
+function Bridge.OnPlayerLoggedOut(cb)
+    RegisterNetEvent('esx:onPlayerLogout', function() cb() end)
+end
+
+function Bridge.AnnouncePlayerLoaded() end
+
+---@return boolean
+function Bridge.UsesStartingApartment()
+    return false
+end

@@ -8,7 +8,6 @@ local function warnUnsupported(name)
 end
 
 function I.AddItem(src, item, count, metadata, slot)
-
     return inv:AddItem(src, item, count or 1, slot, metadata)
 end
 
@@ -22,7 +21,6 @@ function I.GetItemCount(src, item, metadata)
 end
 
 function I.Search(src, searchType, item, metadata)
-
     if searchType == 'count' then
         return I.GetItemCount(src, item, metadata)
     end
@@ -32,6 +30,14 @@ end
 
 function I.CanCarryItem(src, item, count, metadata)
     return inv:CanAddItem(src, item, count or 1)
+end
+
+function I.GetItemDefinition(item)
+    local ok, def = pcall(function()
+        local core = exports['qb-core']:GetCoreObject()
+        return core and core.Shared and core.Shared.Items and core.Shared.Items[item] or nil
+    end)
+    return ok and def or nil
 end
 
 function I.GetItem(src, item, metadata, returnsCount)
@@ -45,7 +51,6 @@ function I.GetSlot(src, slot)
 end
 
 function I.SetMetadata(src, slot, metadata)
-
     local item = inv:GetItemBySlot(src, slot)
     if not item then return false end
     return inv:SetItemData(src, item.name, 'info', metadata)
@@ -64,7 +69,6 @@ function I.ClearInventory(src, keep)
 end
 
 function I.RegisterStash(id, label, slots, weight, owner)
-
     local ok, res = pcall(function()
         return inv:CreateInventory(id, { label = label, slots = slots, maxweight = weight })
     end)
@@ -77,5 +81,12 @@ I.forceOpenInventory  = warnUnsupported('forceOpenInventory')
 I.registerHook        = warnUnsupported('registerHook')
 I.displayMetadata     = warnUnsupported('displayMetadata')
 
-Bridge.Inventory = I
+function I.GetItems()
+    local ok, items = pcall(function()
+        local core = exports['qb-core']:GetCoreObject()
+        return core and core.Shared and core.Shared.Items or nil
+    end)
+    return (ok and type(items) == 'table') and items or {}
+end
 
+Bridge.Inventory = I

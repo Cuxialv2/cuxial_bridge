@@ -62,9 +62,21 @@ function Target.addBoxZone(params)
     })
 end
 
+---@param coords vector3
+---@param options table[]
+---@return number|string zoneId
+function Target.addPoint(coords, options)
+    return ox:addSphereZone({ coords = vec3(coords.x, coords.y, coords.z), radius = 0.4, options = toOx(options) })
+end
+
 ---@param id number|string
 function Target.removeZone(id)
     ox:removeZone(id)
+end
+
+---@param state boolean  true = sin interacción (menús a pantalla completa, minijuegos…)
+function Target.disable(state)
+    ox:disableTargeting(state == true)
 end
 
 Bridge.Target = Target

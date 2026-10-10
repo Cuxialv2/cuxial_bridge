@@ -248,4 +248,45 @@ function DB.GetJobMembers(jobName)
     return out
 end
 
+---@param term string
+---@param page number
+---@param pageSize number
+---@return { rows: table[], total: number, page: number, pages: number }
+function DB.SearchPlayersPaged(term, page, pageSize)
+    page = math.max(1, math.floor(tonumber(page) or 1))
+    pageSize = math.min(math.max(1, math.floor(tonumber(pageSize) or 30)), 100)
+
+    local like = '%' .. tostring(term or ''):lower() .. '%'
+    local where = '(LOWER(identifier) LIKE ? OR LOWER(firstname) LIKE ? OR LOWER(lastname) LIKE ?)'
+    local args = { like, like, like }
+
+    local total = MySQL.scalar.await('SELECT COUNT(*) FROM users WHERE ' .. where, args) or 0
+    local pages = math.max(1, math.ceil(total / pageSize))
+    if page > pages then page = pages end
+
+    local params = { table.unpack(args) }
+    params[#params + 1] = pageSize
+    params[#params + 1] = (page - 1) * pageSize
+
+    local rows = MySQL.query.await([[
+        SELECT identifier, firstname, lastname, job, job_grade
+        FROM users WHERE ]] .. where .. [[ LIMIT ? OFFSET ?
+    ]], params) or {}
+
+    local out = {}
+    for i = 1, #rows do
+        local row = rows[i]
+        out[i] = {
+            citizenid = row.identifier,
+            name = ((row.firstname or '') .. ' ' .. (row.lastname or '')):gsub('^%s*(.-)%s*$', '%1'),
+            account = row.identifier,
+            jobLabel = row.job or '',
+            lastSeen = 0,
+            playtime = 0,
+        }
+    end
+
+    return { rows = out, total = total, page = page, pages = pages }
+end
+
 return DB

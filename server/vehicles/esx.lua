@@ -44,13 +44,22 @@ function V.GetPlayerVehicles(filter)
     return out
 end
 
+---@param ids integer[]
+---@return table[]
+function V.GetPlayerVehiclesByIds(ids)
+    if type(ids) ~= 'table' or #ids == 0 then return {} end
+    local placeholders = ('?,'):rep(#ids):sub(1, -2)
+    local rows = MySQL.query.await(('%s WHERE id IN (%s)'):format(SELECT, placeholders), ids) or {}
+    local out = {}
+    for i = 1, #rows do out[i] = normalize(rows[i]) end
+    return out
+end
+
 function V.GetVehicleIdByPlate(plate)
     if not plate then return nil end
     return MySQL.scalar.await('SELECT id FROM owned_vehicles WHERE plate = ?', { plate })
 end
 
---- @param entity number  (statebag `vehicleid` lo pone el garaje tras spawnear)
---- @param data { state?: integer, garage?: string, props?: table }
 function V.SaveVehicle(entity, data)
     data = data or {}
     local id = entity and Entity(entity).state.vehicleid
@@ -75,8 +84,6 @@ function V.SaveVehicle(entity, data)
     return true
 end
 
---- @param data { model: string, citizenid: string, garage?: string, props?: table, state?: integer, type?: string }
---- @return integer? id
 function V.CreatePlayerVehicle(data)
     if not data or not data.model or not data.citizenid then return nil end
     local props = data.props or {}
@@ -115,7 +122,6 @@ function V.ClaimOwner(id, citizenid, requireState)
     return (n or 0) > 0
 end
 
---- @param field 'vehicleId'|'plate'|'citizenid'
 function V.DeletePlayerVehicles(field, value)
     local col = field == 'vehicleId' and 'id' or field == 'plate' and 'plate' or field == 'citizenid' and 'owner'
     if not col then return false end
@@ -159,7 +165,6 @@ function V.SetStateDepotPrice(id, state, depotPrice)
     MySQL.update.await('UPDATE owned_vehicles SET state = ?, depotprice = ? WHERE id = ?', { state, depotPrice, id })
 end
 
---- @return table<string, integer>
 function V.CountByGarage()
     local rows = MySQL.query.await('SELECT garage, COUNT(*) AS n FROM owned_vehicles WHERE garage IS NOT NULL GROUP BY garage') or {}
     local out = {}
@@ -167,8 +172,6 @@ function V.CountByGarage()
     return out
 end
 
---- @param ids integer[]
---- @return table<integer, number>
 function V.MileageFor(ids)
     local out = {}
     if not ids or #ids == 0 then return out end
@@ -179,8 +182,6 @@ function V.MileageFor(ids)
     return out
 end
 
---- @param opts { search?: string, page?: integer, perPage?: integer }
---- @return { rows: table[], total: integer, page: integer, pages: integer, perPage: integer }
 function V.AdminList(opts)
     opts = opts or {}
     local perPage = tonumber(opts.perPage) or 50

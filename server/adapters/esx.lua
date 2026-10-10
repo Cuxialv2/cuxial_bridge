@@ -24,7 +24,6 @@ local function normalize(xPlayer)
         citizenid = xPlayer.getIdentifier and xPlayer.getIdentifier() or xPlayer.identifier,
         name      = xPlayer.getName and xPlayer.getName() or nil,
         charinfo  = {
-
             firstname = xPlayer.get and xPlayer.get('firstName') or nil,
             lastname  = xPlayer.get and xPlayer.get('lastName') or nil,
         },
@@ -137,6 +136,24 @@ function Bridge.GetMoneyOffline(identifier, account)
     return row and tonumber(row.v) or 0
 end
 
+---@param identifier string
+---@return table<string, number>
+function Bridge.GetAllMoneyOffline(identifier)
+    local out = {}
+    if type(identifier) ~= 'string' or identifier == '' then return out end
+    local rows = MySQL.query.await('SELECT accounts FROM users WHERE identifier = ? LIMIT 1', { identifier })
+    local raw = rows and rows[1] and rows[1].accounts
+    if type(raw) == 'string' then
+        local ok, decoded = pcall(json.decode, raw)
+        raw = ok and decoded or nil
+    end
+    if type(raw) ~= 'table' then return out end
+    for account, amount in pairs(raw) do
+        out[account == 'money' and 'cash' or account] = tonumber(amount) or 0
+    end
+    return out
+end
+
 function Bridge.AddMoneyOffline(identifier, account, amount, _reason)
     local k = esxAccountKey(account)
     local affected = MySQL.update.await(
@@ -174,7 +191,6 @@ function Bridge.SetJob(src, name, grade)
     return true
 end
 function Bridge.SetDuty(src, onDuty)
-
     local p = ESX.GetPlayerFromId(src)
     if not p then return false end
     local job = p.getJob()
@@ -183,7 +199,6 @@ function Bridge.SetDuty(src, onDuty)
     return true
 end
 function Bridge.GetDutyCount(jobType)
-
     local count, sources = 0, {}
     for _, src in ipairs(ESX.GetPlayers()) do
         local p = ESX.GetPlayerFromId(src)
@@ -221,7 +236,9 @@ end
 function Bridge.SetGang(src, name, grade)
     local p = ESX.GetPlayerFromId(src)
     if not p then return false end
-    p.setMeta(GANG_META_KEY, { name = name, label = name, grade = grade or 0, isboss = (grade or 0) == 0 })
+    local gang = { name = name, label = name, grade = grade or 0, isboss = (grade or 0) == 0 }
+    p.setMeta(GANG_META_KEY, gang)
+    TriggerEvent('cuxial_bridge:esx:gangUpdated', src, gang)
     return true
 end
 function Bridge.CreateGangs() end
@@ -259,7 +276,6 @@ function Bridge.SetMetadata(src, key, value)
 end
 
 function Bridge.HasPermission(src, perm)
-
     local p = ESX.GetPlayerFromId(src)
     if not p then return false end
     local group = p.getGroup()
@@ -283,6 +299,12 @@ function Bridge.OnPlayerLoaded(cb)
     end)
 end
 
+function Bridge.OnCharacterLoaded(cb)
+    AddEventHandler('esx:playerLoaded', function(playerId)
+        cb(playerId)
+    end)
+end
+
 function Bridge.OnPlayerUnload(cb)
     AddEventHandler('esx:playerDropped', function(playerId)
         cb(playerId)
@@ -295,8 +317,45 @@ function Bridge.OnJobUpdate(cb)
     end)
 end
 
+function Bridge.OnGangUpdate(cb)
+    AddEventHandler('cuxial_bridge:esx:gangUpdated', function(src, gang)
+        cb(src, gang)
+    end)
+end
+
 function Bridge.OnMoneyChange(_) end
 
 function Bridge.GetVehiclesByName(_) return {} end
 function Bridge.GetVehiclesByHash(_) return {} end
 
+function Bridge.GetGangs() return {} end
+function Bridge.GetVehicleModels() return {} end
+
+---@param citizenid string
+---@return number?
+function Bridge.GetSourceByCitizenId(citizenid)
+    if not citizenid then return nil end
+
+    local p = ESX.GetPlayerFromIdentifier(citizenid)
+    local src = p and p.source
+
+    return (type(src) == 'number' and src > 0) and src or nil
+end
+
+---@param _ string
+---@return boolean
+function Bridge.DeleteCharacter(_)
+    return false
+end
+
+---@return boolean
+function Bridge.Login(_, _, _)
+    return false
+end
+
+function Bridge.Logout(_) end
+
+---@return table[]
+function Bridge.GetCharacters(_)
+    return {}
+end

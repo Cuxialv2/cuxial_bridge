@@ -246,4 +246,71 @@ function DB.GetJobMembers(jobName)
     return out
 end
 
+local hasSearchText
+
+local function searchTextAvailable()
+    if hasSearchText == nil then
+        hasSearchText = (MySQL.scalar.await([[
+            SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = 'players' AND column_name = 'search_text'
+        ]]) or 0) > 0
+    end
+    return hasSearchText
+end
+
+---@param term string
+---@param page number
+---@param pageSize number
+---@return { rows: table[], total: number, page: number, pages: number }
+function DB.SearchPlayersPaged(term, page, pageSize)
+    page = math.max(1, math.floor(tonumber(page) or 1))
+    pageSize = math.min(math.max(1, math.floor(tonumber(pageSize) or 30)), 100)
+
+    local like = '%' .. tostring(term or ''):lower() .. '%'
+    local where, args
+
+    if searchTextAvailable() then
+        where = 'search_text LIKE ?'
+        args = { like }
+    else
+        where = [[(LOWER(citizenid) LIKE ? OR LOWER(name) LIKE ?
+            OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.firstname'))) LIKE ?
+            OR LOWER(JSON_UNQUOTE(JSON_EXTRACT(charinfo, '$.lastname'))) LIKE ?)]]
+        args = { like, like, like, like }
+    end
+
+    local total = MySQL.scalar.await('SELECT COUNT(*) FROM players WHERE ' .. where, args) or 0
+    local pages = math.max(1, math.ceil(total / pageSize))
+    if page > pages then page = pages end
+
+    local params = { table.unpack(args) }
+    params[#params + 1] = pageSize
+    params[#params + 1] = (page - 1) * pageSize
+
+    local rows = MySQL.query.await([[
+        SELECT citizenid, name, charinfo, job, metadata, UNIX_TIMESTAMP(last_updated) AS last_seen
+        FROM players WHERE ]] .. where .. [[
+        ORDER BY last_updated DESC LIMIT ? OFFSET ?
+    ]], params) or {}
+
+    local out = {}
+    for i = 1, #rows do
+        local row = rows[i]
+        local ci = decode(row.charinfo) or {}
+        local job = decode(row.job) or {}
+        local meta = decode(row.metadata) or {}
+
+        out[i] = {
+            citizenid = row.citizenid,
+            name = ((ci.firstname or '') .. ' ' .. (ci.lastname or '')):gsub('^%s*(.-)%s*$', '%1'),
+            account = row.name,
+            jobLabel = job.label or job.name or '',
+            lastSeen = tonumber(row.last_seen) or 0,
+            playtime = tonumber(meta.playtime) or 0,
+        }
+    end
+
+    return { rows = out, total = total, page = page, pages = pages }
+end
+
 return DB

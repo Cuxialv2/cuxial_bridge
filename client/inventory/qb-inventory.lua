@@ -1,12 +1,10 @@
 local I = Bridge.Inventory
 
 function I.useItem(data, cb)
-
     if cb then cb(data) end
 end
 
 function I.Search(searchType, item)
-
     local has = exports['qb-inventory']:HasItem(item)
     if searchType == 'count' then return has and 1 or 0 end
     return has
@@ -24,5 +22,10 @@ function I.openNearbyInventory()
     TriggerServerEvent('inventory:server:OpenInventory')
 end
 
-Bridge.Inventory = I
+---@param invType string
+---@param data any
+function I.openInventory(invType, data)
+    TriggerServerEvent('inventory:server:OpenInventory', invType, data)
+end
 
+Bridge.Inventory = I

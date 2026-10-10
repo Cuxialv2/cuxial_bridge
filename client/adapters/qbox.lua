@@ -1,3 +1,21 @@
+if not QBX then
+    QBX = { PlayerData = {} }
+
+    local ok, pd = pcall(function() return exports.qbx_core:GetPlayerData() end)
+    if ok and pd then QBX.PlayerData = pd end
+
+    RegisterNetEvent('QBCore:Player:SetPlayerData', function(value)
+        QBX.PlayerData = value or {}
+    end)
+    RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
+        local ok2, data = pcall(function() return exports.qbx_core:GetPlayerData() end)
+        if ok2 and data then QBX.PlayerData = data end
+    end)
+    RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
+        QBX.PlayerData = {}
+    end)
+end
+
 local function normalizeJob(job)
     if not job then return nil end
     return {
@@ -58,3 +76,18 @@ function Bridge.OnGangUpdate(cb)
     RegisterNetEvent('QBCore:Client:OnGangUpdate', function(gang) cb(normalizeGang(gang)) end)
 end
 
+function Bridge.OnPlayerLoggedOut(cb)
+    RegisterNetEvent('qbx_core:client:playerLoggedOut', function() cb() end)
+end
+
+function Bridge.AnnouncePlayerLoaded()
+    TriggerServerEvent('QBCore:Server:OnPlayerLoaded')
+    TriggerEvent('QBCore:Client:OnPlayerLoaded')
+end
+
+---@return boolean
+function Bridge.UsesStartingApartment()
+    local ok, core = pcall(lib.load, '@qbx_core.config.client')
+    return ok and type(core) == 'table' and type(core.characters) == 'table'
+        and core.characters.startingApartment == true
+end

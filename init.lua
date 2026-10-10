@@ -5,9 +5,10 @@ Bridge = {
     _resource = 'cuxial_bridge',
 }
 
-local function loadModule(path)
+local function loadModule(path, optional)
     local content = LoadResourceFile(Bridge._resource, path)
     if not content then
+        if optional then return end
         error(('[cuxial_bridge] no se pudo leer el módulo "%s"'):format(path), 2)
     end
     local chunk, err = load(content, ('@@%s/%s'):format(Bridge._resource, path))
@@ -35,13 +36,16 @@ if context == 'server' then
     loadModule('server/vehicles/' .. Bridge.framework .. '.lua')
     loadModule('server/db/' .. Bridge.framework .. '.lua')
     loadModule('server/version.lua')
+    loadModule('server/media.lua', true)
+    loadModule('server/phone.lua')
 else
     loadModule('client/target/' .. Bridge.target .. '.lua')
+    loadModule('client/media.lua', true)
 end
 
 if GetCurrentResourceName() == Bridge._resource then
-    print(('[cuxial_bridge] listo framework=%s inventario=%s contexto=%s')
-        :format(Bridge.framework, Bridge.inventory, context))
+    print(('[cuxial_bridge] listo framework=%s inventario=%s target=%s contexto=%s')
+        :format(Bridge.framework, Bridge.inventory, Bridge.target, context))
     if context == 'server' and Bridge.VersionCheck then
         Bridge.VersionCheck('Cuxialv2/cuxial_bridge')
     end
