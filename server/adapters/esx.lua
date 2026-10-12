@@ -14,11 +14,30 @@ local function getGang(xPlayer)
     return g or { name = 'none', label = 'No Gang', grade = 0, isboss = false }
 end
 
+---@param xPlayer table
+---@param meta table
+---@return table
+local function withStatus(xPlayer, meta)
+    local out = {}
+    for k, v in pairs(meta) do out[k] = v end
+    out.hunger, out.thirst = 0, 0
+    local status = xPlayer.get and xPlayer.get('status')
+    if type(status) ~= 'table' then return out end
+    for _, entry in pairs(status) do
+        if type(entry) == 'table' and (entry.name == 'hunger' or entry.name == 'thirst') then
+            local pct = tonumber(entry.percent) or (tonumber(entry.val) or 0) / 10000
+            out[entry.name] = math.max(0, math.min(100, pct))
+        end
+    end
+    return out
+end
+
 local function normalize(xPlayer)
     if not xPlayer then return nil end
     local job = xPlayer.getJob() or {}
     local meta = xPlayer.getMeta and xPlayer.getMeta()
     if type(meta) ~= 'table' then meta = {} end
+    meta = withStatus(xPlayer, meta)
     return {
         source    = xPlayer.source,
         citizenid = xPlayer.getIdentifier and xPlayer.getIdentifier() or xPlayer.identifier,
@@ -30,6 +49,7 @@ local function normalize(xPlayer)
         money = {
             cash = getAccountMoney(xPlayer, 'cash'),
             bank = getAccountMoney(xPlayer, 'bank'),
+            black_money = getAccountMoney(xPlayer, 'black_money'),
         },
         job = {
             name = job.name, label = job.label,
@@ -85,6 +105,7 @@ function Bridge.GetOfflinePlayer(identifier)
         money = {
             cash = accounts.money or 0,
             bank = accounts.bank or 0,
+            black_money = accounts.black_money or 0,
         },
         job  = { name = row.job, grade = row.job_grade },
         gang = meta[GANG_META_KEY] or { name = 'none', label = 'No Gang', grade = 0, isboss = false },
@@ -131,8 +152,8 @@ local function esxAccountKey(account) return ACCOUNT_MAP[account] or 'bank' end
 
 function Bridge.GetMoneyOffline(identifier, account)
     local k = esxAccountKey(account)
-    local row = MySQL.single.await(
-        ("SELECT JSON_EXTRACT(accounts, '$.%s') AS v FROM users WHERE identifier = ?"):format(k), { identifier })
+    local row = (MySQL.query.await(
+        ("SELECT JSON_EXTRACT(accounts, '$.%s') AS v FROM users WHERE identifier = ?"):format(k), { identifier }) or {})[1]
     return row and tonumber(row.v) or 0
 end
 
@@ -233,17 +254,46 @@ function Bridge.GetGang(src)
     if not p then return nil end
     return getGang(p)
 end
+---@return table<string, table>
+local function configGangs()
+    local esx = Bridge.Config and Bridge.Config.esx
+    return type(esx) == 'table' and type(esx.gangs) == 'table' and esx.gangs or {}
+end
+
+---@param gang table
+---@param grade integer
+---@return table?
+local function gangGrade(gang, grade)
+    local grades = type(gang.grades) == 'table' and gang.grades or {}
+    return grades[grade] or grades[tostring(grade)]
+end
+
 function Bridge.SetGang(src, name, grade)
     local p = ESX.GetPlayerFromId(src)
     if not p then return false end
-    local gang = { name = name, label = name, grade = grade or 0, isboss = (grade or 0) == 0 }
+    grade = math.floor(tonumber(grade) or 0)
+    local def = configGangs()[name]
+    local gradeDef = def and gangGrade(def, grade)
+    if name ~= 'none' and not gradeDef then return false end
+    local gang = {
+        name = name,
+        label = def and def.label or 'Sin banda',
+        grade = grade,
+        gradeLabel = gradeDef and gradeDef.name or nil,
+        isboss = gradeDef and gradeDef.isboss == true or false,
+    }
     p.setMeta(GANG_META_KEY, gang)
     TriggerEvent('cuxial_bridge:esx:gangUpdated', src, gang)
     return true
 end
 function Bridge.CreateGangs() end
 function Bridge.RemoveGang() end
-function Bridge.IsGradeBoss(_, grade) return (grade or 0) == 0 end
+function Bridge.IsGradeBoss(gangName, grade)
+    local def = configGangs()[gangName]
+    if not def then return (grade or 0) == 0 end
+    local gradeDef = gangGrade(def, math.floor(tonumber(grade) or 0))
+    return gradeDef and gradeDef.isboss == true or false
+end
 
 function Bridge.SetCharName(src, firstname, lastname)
     local p = ESX.GetPlayerFromId(src)
@@ -325,11 +375,76 @@ end
 
 function Bridge.OnMoneyChange(_) end
 
-function Bridge.GetVehiclesByName(_) return {} end
-function Bridge.GetVehiclesByHash(_) return {} end
+local tableCache = {}
 
-function Bridge.GetGangs() return {} end
-function Bridge.GetVehicleModels() return {} end
+---@param name string
+---@return boolean
+local function tableExists(name)
+    if tableCache[name] ~= nil then return tableCache[name] end
+    if not MySQL then return false end
+    local ok, rows = pcall(MySQL.query.await, 'SHOW TABLES LIKE ?', { name })
+    tableCache[name] = ok and rows ~= nil and rows[1] ~= nil
+    return tableCache[name]
+end
+
+local columnCache = {}
+
+---@param tbl string
+---@param column string
+---@return boolean
+local function columnExists(tbl, column)
+    local key = tbl .. '.' .. column
+    if columnCache[key] ~= nil then return columnCache[key] end
+    if not MySQL then return false end
+    local ok, rows = pcall(MySQL.query.await, ('SHOW COLUMNS FROM `%s` LIKE ?'):format(tbl), { column })
+    columnCache[key] = ok and rows ~= nil and rows[1] ~= nil
+    return columnCache[key]
+end
+
+Bridge._esxTableExists = tableExists
+Bridge._esxColumnExists = columnExists
+
+---@return table<string, { name: string, model: string, price: number, category: string?, hash: integer }>
+function Bridge.GetVehicleModels()
+    local out = {}
+    if not tableExists('vehicles') then return out end
+    local ok, rows = pcall(MySQL.query.await, 'SELECT name, model, price, category FROM vehicles')
+    if not ok or type(rows) ~= 'table' then return out end
+    for i = 1, #rows do
+        local row = rows[i]
+        if row.model then
+            out[row.model] = {
+                name = row.name or row.model,
+                model = row.model,
+                price = tonumber(row.price) or 0,
+                category = row.category,
+                hash = joaat(row.model),
+            }
+        end
+    end
+    return out
+end
+
+function Bridge.GetVehiclesByName(name)
+    local cat = Bridge.GetVehicleModels()
+    if name == nil then return cat end
+    return cat[name]
+end
+function Bridge.GetVehiclesByHash(hash)
+    for _, v in pairs(Bridge.GetVehicleModels()) do
+        if v.hash == hash then return v end
+    end
+    return nil
+end
+
+---@return table<string, table>
+function Bridge.GetGangs()
+    local out = {}
+    for name, def in pairs(configGangs()) do
+        out[name] = { label = def.label or name, grades = def.grades or {} }
+    end
+    return out
+end
 
 ---@param citizenid string
 ---@return number?
@@ -344,8 +459,30 @@ end
 
 ---@param _ string
 ---@return boolean
-function Bridge.DeleteCharacter(_)
-    return false
+function Bridge.DeleteCharacter(citizenid)
+    if type(citizenid) ~= 'string' or citizenid == '' or not MySQL then return false end
+
+    local online = ESX.GetPlayerFromIdentifier(citizenid)
+    if online and online.source then
+        DropPlayer(online.source, 'Personaje eliminado por la administración')
+        local deadline = GetGameTimer() + 5000
+        while ESX.GetPlayerFromIdentifier(citizenid) and GetGameTimer() < deadline do Wait(100) end
+    end
+
+    local extra = {
+        { 'owned_vehicles', 'owner' },
+        { 'user_licenses', 'owner' },
+        { 'billing', 'identifier' },
+    }
+    for i = 1, #extra do
+        local tbl, col = extra[i][1], extra[i][2]
+        if tableExists(tbl) then
+            pcall(MySQL.update.await, ('DELETE FROM `%s` WHERE `%s` = ?'):format(tbl, col), { citizenid })
+        end
+    end
+
+    local ok, affected = pcall(MySQL.update.await, 'DELETE FROM users WHERE identifier = ?', { citizenid })
+    return ok and (affected or 0) > 0
 end
 
 ---@return boolean
@@ -358,4 +495,24 @@ function Bridge.Logout(_) end
 ---@return table[]
 function Bridge.GetCharacters(_)
     return {}
+end
+
+---@param src number
+---@return boolean handled
+function Bridge.RevivePlayer(src)
+    if GetResourceState('esx_death') == 'started' then
+        local ok = pcall(function() return exports.esx_death:Revive(src, 'admin') end)
+        if ok then return true end
+    end
+    if GetResourceState('esx_ambulancejob') ~= 'started' then return false end
+    TriggerClientEvent('esx_ambulancejob:revive', src)
+    return true
+end
+
+---@param src number
+---@return boolean handled
+function Bridge.HealPlayer(src)
+    if GetResourceState('esx_ambulancejob') ~= 'started' then return false end
+    TriggerClientEvent('esx_ambulancejob:heal', src, 'big', true)
+    return true
 end

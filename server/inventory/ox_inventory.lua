@@ -57,6 +57,19 @@ end
 function I.openInventory(...) return inv:openInventory(...) end
 function I.openNearbyInventory(...) return inv:openNearbyInventory(...) end
 function I.forceOpenInventory(...) return inv:forceOpenInventory(...) end
+
+local VEHICLE_PREFIX = { glovebox = 'glove', trunk = 'trunk' }
+
+---@param src number
+---@param kind 'glovebox'|'trunk'
+---@param plate string
+---@return boolean
+function I.OpenVehicleInventory(src, kind, plate)
+    local prefix = VEHICLE_PREFIX[kind]
+    if not prefix or type(plate) ~= 'string' or plate == '' then return false end
+    inv:forceOpenInventory(src, kind, prefix .. plate)
+    return true
+end
 function I.registerHook(...) return inv:registerHook(...) end
 function I.displayMetadata(...) return inv:displayMetadata(...) end
 

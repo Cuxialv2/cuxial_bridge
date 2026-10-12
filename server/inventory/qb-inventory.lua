@@ -77,8 +77,37 @@ end
 
 I.openInventory       = warnUnsupported('openInventory')
 I.openNearbyInventory = warnUnsupported('openNearbyInventory')
-I.forceOpenInventory  = warnUnsupported('forceOpenInventory')
-I.registerHook        = warnUnsupported('registerHook')
+local VEHICLE_PREFIX = { glovebox = 'glovebox-', trunk = 'trunk-' }
+
+---@param src number
+---@param invType 'player'|'stash'|'glovebox'|'trunk'|string
+---@param data any  source del jugador en 'player'; id del inventario en el resto
+---@return boolean
+function I.forceOpenInventory(src, invType, data)
+    if invType == 'player' then
+        local target = tonumber(type(data) == 'table' and data.id or data)
+        if not target then return false end
+        inv:OpenInventoryById(src, target)
+        return true
+    end
+    local id = type(data) == 'table' and data.id or data
+    if type(id) ~= 'string' or id == '' then return false end
+    inv:OpenInventory(src, id)
+    return true
+end
+
+---@param src number
+---@param kind 'glovebox'|'trunk'
+---@param plate string
+---@return boolean
+function I.OpenVehicleInventory(src, kind, plate)
+    local prefix = VEHICLE_PREFIX[kind]
+    if not prefix or type(plate) ~= 'string' or plate == '' then return false end
+    inv:OpenInventory(src, prefix .. plate)
+    return true
+end
+
+I.registerHook      = warnUnsupported('registerHook')
 I.displayMetadata     = warnUnsupported('displayMetadata')
 
 function I.GetItems()

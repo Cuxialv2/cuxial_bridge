@@ -50,9 +50,9 @@ local function identityFromRow(row)
 end
 
 function DB.GetCitizen(id)
-    local row = MySQL.single.await(
+    local row = (MySQL.query.await(
         'SELECT identifier, firstname, lastname, dateofbirth, sex, job, job_grade, metadata, police_image, wanted, dangerous FROM users WHERE identifier = ?',
-        { id })
+        { id }) or {})[1]
     if not row then return nil end
     return identityFromRow(row)
 end
@@ -98,8 +98,8 @@ function DB.GetWanted(limit)
 end
 
 function DB.GetCitizenFlags(id)
-    local row = MySQL.single.await(
-        'SELECT wanted, dangerous, police_image FROM users WHERE identifier = ?', { id }) or {}
+    local row = (MySQL.query.await(
+        'SELECT wanted, dangerous, police_image FROM users WHERE identifier = ?', { id }) or {})[1] or {}
     return { wanted = asBool(row.wanted), dangerous = asBool(row.dangerous), image = row.police_image }
 end
 
@@ -166,12 +166,12 @@ function DB.SearchVehicles(term, limit)
 end
 
 function DB.GetVehicleByPlate(plate)
-    local row = MySQL.single.await(([[
+    local row = (MySQL.query.await(([[
         SELECT v.%s AS ownerId, v.plate, v.vehicle, v.wanted, v.description, v.police_image,
                u.firstname, u.lastname
         FROM %s v LEFT JOIN users u ON u.identifier = v.%s
         WHERE v.plate = ?
-    ]]):format(DB.vehOwner, DB.vehTable, DB.vehOwner), { plate })
+    ]]):format(DB.vehOwner, DB.vehTable, DB.vehOwner), { plate }) or {})[1]
     if not row then return nil end
     return {
         ownerId = row.ownerId, plate = row.plate, model = vehModel(row.vehicle),
@@ -182,11 +182,11 @@ function DB.GetVehicleByPlate(plate)
 end
 
 function DB.GetVehicleScan(plate)
-    local row = MySQL.single.await(([[
+    local row = (MySQL.query.await(([[
         SELECT v.%s AS ownerId, v.vehicle, v.wanted, u.firstname, u.lastname
         FROM %s v LEFT JOIN users u ON u.identifier = v.%s
         WHERE v.plate = ?
-    ]]):format(DB.vehOwner, DB.vehTable, DB.vehOwner), { plate })
+    ]]):format(DB.vehOwner, DB.vehTable, DB.vehOwner), { plate }) or {})[1]
     if not row then return nil end
     return {
         ownerId = row.ownerId, mods = decode(row.vehicle), wanted = row.wanted,
@@ -210,10 +210,10 @@ function DB.ListPlayers(limit)
 end
 
 function DB.GetMoneyTotals()
-    local row = MySQL.single.await([[SELECT
+    local row = (MySQL.query.await([[SELECT
         COALESCE(SUM(JSON_EXTRACT(accounts, '$.bank')), 0) AS bank,
         COALESCE(SUM(JSON_EXTRACT(accounts, '$.money')), 0) AS cash,
-        COUNT(*) AS players FROM users]])
+        COUNT(*) AS players FROM users]]) or {})[1]
     return {
         bank = tonumber(row and row.bank) or 0,
         cash = tonumber(row and row.cash) or 0,
@@ -268,10 +268,12 @@ function DB.SearchPlayersPaged(term, page, pageSize)
     params[#params + 1] = pageSize
     params[#params + 1] = (page - 1) * pageSize
 
-    local rows = MySQL.query.await([[
-        SELECT identifier, firstname, lastname, job, job_grade
-        FROM users WHERE ]] .. where .. [[ LIMIT ? OFFSET ?
-    ]], params) or {}
+    local hasLastSeen = Bridge._esxColumnExists and Bridge._esxColumnExists('users', 'last_seen')
+    local rows = MySQL.query.await(([[
+        SELECT identifier, firstname, lastname, job, job_grade%s
+        FROM users WHERE ]] .. where .. [[ %s LIMIT ? OFFSET ?
+    ]]):format(hasLastSeen and ', UNIX_TIMESTAMP(last_seen) AS last_seen' or '',
+        hasLastSeen and 'ORDER BY last_seen DESC' or ''), params) or {}
 
     local out = {}
     for i = 1, #rows do
@@ -281,7 +283,7 @@ function DB.SearchPlayersPaged(term, page, pageSize)
             name = ((row.firstname or '') .. ' ' .. (row.lastname or '')):gsub('^%s*(.-)%s*$', '%1'),
             account = row.identifier,
             jobLabel = row.job or '',
-            lastSeen = 0,
+            lastSeen = tonumber(row.last_seen) or 0,
             playtime = 0,
         }
     end

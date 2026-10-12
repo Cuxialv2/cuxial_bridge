@@ -42,9 +42,9 @@ end
 
 function Bridge.GetOfflinePlayer(cid)
     if not cid then return nil end
-    local row = MySQL.single.await(
+    local row = (MySQL.query.await(
         'SELECT citizenid, name, charinfo, money, job, gang, metadata FROM players WHERE citizenid = ?',
-        { cid })
+        { cid }) or {})[1]
     if not row then return nil end
     local job = decodeJson(row.job) or {}
     local jobGrade = job.grade or {}
@@ -97,8 +97,8 @@ end
 
 function Bridge.GetMoneyOffline(identifier, account)
     local k = qbAccountKey(account)
-    local row = MySQL.single.await(
-        ("SELECT JSON_EXTRACT(money, '$.%s') AS v FROM players WHERE citizenid = ?"):format(k), { identifier })
+    local row = (MySQL.query.await(
+        ("SELECT JSON_EXTRACT(money, '$.%s') AS v FROM players WHERE citizenid = ?"):format(k), { identifier }) or {})[1]
     return row and tonumber(row.v) or 0
 end
 
@@ -156,7 +156,7 @@ function Bridge.GetJobs()
 end
 
 function Bridge.SetJob(src, name, grade)
-    local p = QBCore.Functions.GetPlayerByCitizenId(src)
+    local p = QBCore.Functions.GetPlayer(src)
     return p and p.Functions.SetJob(name, grade or 0) or false
 end
 
@@ -392,4 +392,20 @@ function Bridge.GetCharacters(src)
     end
 
     return rows
+end
+
+---@param src number
+---@return boolean handled
+function Bridge.RevivePlayer(src)
+    if GetResourceState('qb-ambulancejob') ~= 'started' then return false end
+    TriggerClientEvent('hospital:client:Revive', src)
+    return true
+end
+
+---@param src number
+---@return boolean handled
+function Bridge.HealPlayer(src)
+    if GetResourceState('qb-ambulancejob') ~= 'started' then return false end
+    TriggerClientEvent('hospital:client:HealInjuries', src, 'full')
+    return true
 end

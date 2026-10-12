@@ -1,3 +1,23 @@
+## 2.14.0
+
+### Nuevo
+- **`Bridge.RevivePlayer(src)`** / **`Bridge.HealPlayer(src)`** → `true` si el sistema médico del framework se encargó. qbcore: `qb-ambulancejob` (`hospital:client:Revive`, `hospital:client:HealInjuries 'full'`). esx: `esx_death:Revive` o, en versiones antiguas, `esx_ambulancejob:revive`; curar con `esx_ambulancejob:heal`. qbox y sin recurso: `false` (el que llama usa su camino).
+- **`Bridge.Inventory.OpenVehicleInventory(src, kind, plate)`** (`kind` = `glovebox`/`trunk`): ox_inventory (`glove`/`trunk` + matrícula) y qb-inventory (`glovebox-`/`trunk-` + matrícula).
+- **`shared/config.lua`** (`Bridge.Config`): `esx.gangs`, lista de bandas para ESX con la misma forma que qbox/qbcore.
+- qb-inventory: `forceOpenInventory` implementado (`player` → `OpenInventoryById`; resto → `OpenInventory(src, id)`).
+- ESX: `GetGangs` (desde config), `GetVehicleModels` / `GetVehiclesByName` / `GetVehiclesByHash` (tabla `vehicles` de esx_vehicleshop si existe), `DeleteCharacter` (expulsa y borra `users` + `owned_vehicles`, `user_licenses`, `billing` si existen).
+- ESX normalize: `money.black_money`; `metadata.hunger`/`thirst` 0-100 desde esx_status (0 sin él).
+- ESX `DB.SearchPlayersPaged`: `lastSeen` desde `users.last_seen` si la columna existe.
+- qbcore: `Bridge.DB` (reutiliza el módulo de qbox; mismo esquema `players`/`player_vehicles`).
+
+### Arreglo
+- qbcore `SetJob` buscaba al jugador por citizenid con un source: nunca cambiaba el trabajo.
+- qbcore/esx `Vehicles.CreatePlayerVehicle`: acepta `data.props.plate` o `data.plate`; sin ninguna genera una única (8 caracteres). Antes devolvía `nil` si faltaba `props.plate`.
+- ESX `SetGang` valida contra `esx.gangs` (nombre y grado); `IsGradeBoss` usa `isboss` del grado.
+
+### Notas
+- qbox sin cambios de comportamiento.
+
 ## 2.13.2
 
 ### Nuevo
@@ -9,6 +29,7 @@
 
 ### Notas
 - Cambio **aditivo**: no toca ninguna función existente.
+- Los módulos de `media` pasan a ser opcionales: si no están en la carpeta, el bridge arranca igual.
 
 ## 2.13.0
 

@@ -120,3 +120,23 @@ end
 function Bridge.Vehicles.GetStorageByOwner(identifier)
     return {}
 end
+
+---@param src number
+---@return boolean handled
+function Bridge.RevivePlayer(src)
+    return false
+end
+
+---@param src number
+---@return boolean handled
+function Bridge.HealPlayer(src)
+    return false
+end
+
+---@param src number
+---@param kind 'glovebox'|'trunk'
+---@param plate string
+---@return boolean
+function Bridge.Inventory.OpenVehicleInventory(src, kind, plate)
+    return false
+end

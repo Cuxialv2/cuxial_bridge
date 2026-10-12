@@ -25,7 +25,7 @@ local function normalize(r)
 end
 
 function V.GetPlayerVehicle(id)
-    return normalize(MySQL.single.await(SELECT .. ' WHERE id = ?', { id }))
+    return normalize((MySQL.query.await(SELECT .. ' WHERE id = ?', { id }) or {})[1])
 end
 
 function V.GetPlayerVehicles(filter)
@@ -84,11 +84,29 @@ function V.SaveVehicle(entity, data)
     return true
 end
 
+---@param tbl string
+---@return string?
+local function uniquePlate(tbl)
+    local chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'
+    for _ = 1, 50 do
+        local buf = {}
+        for i = 1, 8 do
+            local n = math.random(1, #chars)
+            buf[i] = chars:sub(n, n)
+        end
+        local plate = table.concat(buf)
+        local rows = MySQL.query.await(('SELECT 1 FROM %s WHERE plate = ? LIMIT 1'):format(tbl), { plate })
+        if not rows or not rows[1] then return plate end
+    end
+    return nil
+end
+
 function V.CreatePlayerVehicle(data)
     if not data or not data.model or not data.citizenid then return nil end
     local props = data.props or {}
-    local plate = props.plate
+    local plate = props.plate or data.plate or uniquePlate('owned_vehicles')
     if not plate then return nil end
+    props.plate = plate
     if props.model == nil then props.model = GetHashKey(data.model) end
 
     return MySQL.insert.await(

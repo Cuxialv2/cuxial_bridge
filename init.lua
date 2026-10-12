@@ -22,6 +22,8 @@ Bridge._loadModule = loadModule
 
 loadModule('shared/detect.lua')
 
+Bridge.Config = loadModule('shared/config.lua', true) or {}
+
 local context = IsDuplicityVersion() and 'server' or 'client'
 Bridge.context = context
 
