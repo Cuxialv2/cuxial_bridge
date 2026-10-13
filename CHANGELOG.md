@@ -1,3 +1,9 @@
+## 2.14.2
+
+### Rendimiento
+- qbox `Bridge.GetDutyCount(jobType)`: usa `GetDutyCountType` y `GetDutyCountJob` de qbx_core en vez de recorrer todos los jugadores con `GetPlayer` (cada llamada cruzaba el objeto entero del jugador entre recursos). Con 200+ jugadores bajaba picos de 30-60 ms en recursos que cuentan servicio a menudo. Mismo resultado: total y lista de sources sin duplicados.
+- qbox `Bridge.GetMoney(src, account)`: usa `GetMoney` de qbx_core en lugar de `GetPlayer`.
+
 ## 2.14.1
 
 ### Arreglo

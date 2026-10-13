@@ -109,9 +109,8 @@ function Bridge.GetIdentifier(src)
 end
 
 function Bridge.GetMoney(src, account)
-    local p = core:GetPlayer(src)
-    if not p then return 0 end
-    return p.PlayerData.money[account] or 0
+    local value = core:GetMoney(src, account)
+    return type(value) == 'number' and value or 0
 end
 
 function Bridge.AddMoney(src, account, amount, reason)
@@ -199,17 +198,18 @@ function Bridge.SetDuty(src, onDuty)
 end
 
 function Bridge.GetDutyCount(jobType)
-    local count, sources = 0, {}
-    for _, src in ipairs(GetPlayers()) do
-        src = tonumber(src)
-        local p = src and core:GetPlayer(src)
-        local job = p and p.PlayerData.job
-        if job and job.onduty and (job.type == jobType or job.name == jobType) then
-            count = count + 1
-            sources[#sources + 1] = src
+    local seen, sources = {}, {}
+    local _, byType = core:GetDutyCountType(jobType)
+    local _, byName = core:GetDutyCountJob(jobType)
+    for _, list in ipairs({ byType or {}, byName or {} }) do
+        for _, src in ipairs(list) do
+            if not seen[src] then
+                seen[src] = true
+                sources[#sources + 1] = src
+            end
         end
     end
-    return count, sources
+    return #sources, sources
 end
 
 function Bridge.GetDutyCountJob(jobName)
