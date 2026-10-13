@@ -11,7 +11,7 @@ local function loadModule(path, optional)
         if optional then return end
         error(('[cuxial_bridge] no se pudo leer el módulo "%s"'):format(path), 2)
     end
-    local chunk, err = load(content, ('@@%s/%s'):format(Bridge._resource, path))
+    local chunk, err = load(content, ('@%s/%s'):format(Bridge._resource, path))
     if not chunk then
         error(('[cuxial_bridge] error compilando "%s": %s'):format(path, err), 2)
     end

@@ -1,3 +1,8 @@
+## 2.14.1
+
+### Arreglo
+- Los módulos del bridge se cargaban con nombre `@@cuxial_bridge/...`. `lib.require` de ox_lib toma el recurso del primer archivo `@@` que encuentra en la pila, así que un recurso que llamaba a `lib.require('data.x')` dentro de un callback del bridge (por ejemplo `OnPlayerLoaded`) buscaba el archivo en `cuxial_bridge` y fallaba con «module not found» y «circular-dependency». Ahora se cargan como `@cuxial_bridge/...` y `lib.require` resuelve al recurso que llama.
+
 ## 2.14.0
 
 ### Nuevo
