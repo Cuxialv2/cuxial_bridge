@@ -40,6 +40,7 @@ if context == 'server' then
     loadModule('server/version.lua')
     loadModule('server/media.lua', true)
     loadModule('server/phone.lua')
+    loadModule('server/business.lua', true)
 else
     loadModule('client/target/' .. Bridge.target .. '.lua')
     loadModule('client/media.lua', true)

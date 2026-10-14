@@ -1,3 +1,15 @@
+## 2.16.0
+
+### Nuevo
+- **`Bridge.Jobs.Members(name)`** → `{ { cid, name, grade, online, src? } }` con conectados y desconectados. qbox: `GetGroupMembers(name, 'job')` (respaldo SQL en `player_groups`) + nombres con `GetOfflinePlayersBatch`; qbcore: conectados + `players` por `job.name`; esx: `users.job`. Sin oxmysql: solo conectados.
+- **`Bridge.Jobs.Remove(cid, name)`** → `true` si le quita ese trabajo (conectado o no). qbox: `RemovePlayerFromJob`; qbcore: `SetJob('unemployed', 0)` o `UPDATE players`; esx: `setJob('unemployed', 0)` o `UPDATE users`. Solo quita si su trabajo es `name`.
+
+## 2.15.0
+
+### Nuevo
+- **`Bridge.Jobs.Ensure(name, job)`** crea o actualiza un trabajo al arrancar (`job = { label, type?, defaultDuty?, offDutyPay?, grades = { { name, payment?, isboss? } } }`, grados 0..n por orden). qbox: `CreateJob` en memoria (no escribe `shared/jobs.lua`); qbcore: `AddJob`; esx: filas en `jobs`/`job_grades` (INSERT IGNORE) + `RefreshJobs`. `Bridge.Jobs.Exists(name)`.
+- **`Bridge.Society.AddMoney|RemoveMoney(society, amount, reason)`** y **`GetBalance(society)`**: cuxial_banking → Renewed-Banking → qb-banking → esx_addonaccount (`society_<name>`). `Bridge.Society.Provider()` dice cuál hay (`nil` = ninguno).
+
 ## 2.14.2
 
 ### Rendimiento
@@ -40,7 +52,6 @@
 
 ### Notas
 - Cambio **aditivo**: no toca ninguna función existente.
-- Los módulos de `media` pasan a ser opcionales: si no están en la carpeta, el bridge arranca igual.
 
 ## 2.13.0
 
