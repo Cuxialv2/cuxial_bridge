@@ -1,3 +1,10 @@
+## 2.17.0
+
+### Nuevo
+- **`Bridge.Media.List(tag?)`** → `{ { id, src, tag, viewers, startedAt, audio, relay } }` de las sesiones activas del recurso, por orden de apertura. **`Bridge.Media.ByTarget(src)`** (id de la sesión que emite ese jugador) e **`IsViewer(id, src)`**.
+- Evento local `cuxial_bridge:mediaEnded` (`id, reason, tag, resource`) al cerrarse cualquier sesión, además de `onEnd`.
+- webkit: `createLiveHost({ onTransport })` + `host.relay`; `viewer.relay`. Sin cambios de comportamiento por defecto.
+
 ## 2.16.0
 
 ### Nuevo
@@ -52,6 +59,7 @@
 
 ### Notas
 - Cambio **aditivo**: no toca ninguna función existente.
+- Los módulos de `media` pasan a ser opcionales: si no están en la carpeta, el bridge arranca igual.
 
 ## 2.13.0
 

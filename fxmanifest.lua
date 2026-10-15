@@ -5,13 +5,14 @@ lua54 'yes'
 name 'cuxial_bridge'
 author 'Cuxial'
 description 'Capa de compatibilidad multi-framework (qbox / qbcore / esx) para todos los scripts Cuxial'
-version '2.16.0'
+version '2.17.0'
 shared_scripts {
     '@ox_lib/init.lua',
 }
 
 server_scripts {
     'init.lua',
+    'server/media_sign.js',
 }
 
 files {
@@ -32,6 +33,7 @@ files {
     'server/db/esx.lua',
     'server/version.lua',
     'server/zones.lua',
+    'server/media.lua',
     'server/phone.lua',
     'server/business.lua',
     'client/api.lua',
@@ -44,5 +46,6 @@ files {
     'client/target/sleepless_interact.lua',
     'client/target/qb-target.lua',
     'client/zones.lua',
+    'client/media.lua',
 }
 
