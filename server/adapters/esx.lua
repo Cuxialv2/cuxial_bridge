@@ -373,6 +373,9 @@ function Bridge.OnGangUpdate(cb)
     end)
 end
 
+---ESX no tiene servicio por trabajo: no hay nada que escuchar.
+function Bridge.OnDutyChange(_cb) end
+
 function Bridge.OnMoneyChange(_) end
 
 local tableCache = {}

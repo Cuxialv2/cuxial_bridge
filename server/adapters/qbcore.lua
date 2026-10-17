@@ -294,6 +294,12 @@ function Bridge.OnGangUpdate(cb)
     end)
 end
 
+function Bridge.OnDutyChange(cb)
+    AddEventHandler('QBCore:Server:SetDuty', function(src, onDuty)
+        cb(src, onDuty)
+    end)
+end
+
 function Bridge.OnMoneyChange(cb)
     AddEventHandler('QBCore:Server:OnMoneyChange', cb)
 end

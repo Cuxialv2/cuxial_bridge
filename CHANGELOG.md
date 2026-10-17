@@ -1,3 +1,9 @@
+## 2.18.0
+
+### Nuevo
+- **Registro de conectados en memoria** (`server/online.lua`): `Bridge.OnlinePlayers()` → `{ [src] = { src, cid, job, grade, duty, boss, gang, gangGrade } }`, `Bridge.OnlineByJob(job|set|lista, onDutyOnly?)`, `Bridge.OnlineByGang(gang)`, `Bridge.OnlineSource(cid)`, `Bridge.OnlineEntry(src)`, `Bridge.OnlineCount()`. Vive en cada recurso que incluye el bridge y se mantiene con los eventos del framework (carga, descarga, trabajo, banda, servicio) más un repaso cada 5 min; consultarlo no llama al framework por jugador. Usarlo en vez de recorrer `GetPlayers()` con `GetPlayer`/`GetJob`/`GetIdentifier`.
+- **`Bridge.OnDutyChange(cb(src, onDuty))`**: qbox/qbcore `QBCore:Server:SetDuty`; esx no aplica.
+
 ## 2.17.0
 
 ### Nuevo

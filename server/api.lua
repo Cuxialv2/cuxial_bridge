@@ -24,6 +24,7 @@ local CONTRACT = {
     'OnPlayerUnload',
     'OnJobUpdate',
     'OnGangUpdate',
+    'OnDutyChange',
     'OnMoneyChange',
     'GetVehiclesByName', 'GetVehiclesByHash',
 }

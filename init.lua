@@ -37,6 +37,7 @@ loadModule(context .. '/zones.lua')
 if context == 'server' then
     loadModule('server/vehicles/' .. Bridge.framework .. '.lua')
     loadModule('server/db/' .. Bridge.framework .. '.lua')
+    loadModule('server/online.lua')
     loadModule('server/version.lua')
     loadModule('server/media.lua', true)
     loadModule('server/phone.lua')
