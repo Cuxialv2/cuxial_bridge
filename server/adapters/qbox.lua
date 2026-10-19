@@ -1,5 +1,13 @@
 local core = exports.qbx_core
 
+---@param query string
+---@param params? table
+---@return table?
+local function first(query, params)
+    local rows = MySQL.query.await(query, params)
+    return rows and rows[1]
+end
+
 local function normalize(p)
     if not p or not p.PlayerData then return nil end
     local pd = p.PlayerData
@@ -78,7 +86,7 @@ end
 
 function Bridge.GetOfflinePlayer(cid)
     if not cid then return nil end
-    local row = MySQL.single.await(
+    local row = first(
         ('SELECT %s FROM players WHERE citizenid = ?'):format(OFFLINE_COLUMNS), { cid })
     return normalizeOffline(row)
 end
@@ -131,7 +139,7 @@ end
 
 function Bridge.GetMoneyOffline(identifier, account)
     local k = qbAccountKey(account)
-    local row = MySQL.single.await(
+    local row = first(
         ("SELECT JSON_EXTRACT(money, '$.%s') AS v FROM players WHERE citizenid = ?"):format(k), { identifier })
     return row and tonumber(row.v) or 0
 end

@@ -1,6 +1,43 @@
 if Bridge.context ~= 'server' then return end
 
-local checked = {}
+local REGISTER_EVENT = 'cuxial_bridge:versionRegister'
+local resource = GetCurrentResourceName()
+
+---@param repository? string
+---@param opts? table
+function Bridge.VersionCheck(repository, opts)
+    if resource == Bridge._resource then return end
+    TriggerEvent(REGISTER_EVENT, resource)
+end
+
+if resource ~= Bridge._resource then return end
+
+local DEFAULT_URL = 'https://bot-production-f7ef.up.railway.app'
+local FOOTER = '  ^9Descarga en portal.cfx.re · novedades en docs.cuxial.com^7'
+local FIRST_DELAY = 15000
+local CACHE_TTL = 6 * 3600
+local MAX_DETAILS = 3
+local SEVERITY = {
+    major = { '^1', 'mayor' },
+    minor = { '^3', 'menor' },
+    patch = { '^2', 'parche' },
+}
+
+local registered = {}
+local cache, cachedAt = nil, 0
+local ready = false
+
+---@return boolean
+local function enabled()
+    return GetConvar('cuxial_versioncheck', '1') ~= '0'
+end
+
+---@return string
+local function baseUrl()
+    local base = GetConvar('cuxial_versioncheck_url', '')
+    if base == '' then base = DEFAULT_URL end
+    return (base:gsub('/+$', ''))
+end
 
 ---@param v string
 ---@return integer[]
@@ -12,7 +49,7 @@ end
 
 ---@param a integer[]
 ---@param b integer[]
----@return integer  -1 si a<b, 0 igual, 1 si a>b
+---@return integer
 local function cmp(a, b)
     for i = 1, 3 do
         local x, y = a[i] or 0, b[i] or 0
@@ -23,105 +60,181 @@ end
 
 ---@param cv integer[]
 ---@param lv integer[]
----@return string label, string color
+---@return string
 local function severity(cv, lv)
-    if (lv[1] or 0) > (cv[1] or 0) then return 'MAJOR', '^1' end
-    if (lv[2] or 0) > (cv[2] or 0) then return 'MINOR', '^3' end
-    return 'PATCH', '^2'
+    if (lv[1] or 0) > (cv[1] or 0) then return 'major' end
+    if (lv[2] or 0) > (cv[2] or 0) then return 'minor' end
+    return 'patch'
 end
 
----@param body string|nil
----@param maxLines integer
----@return string[]|nil
-local function formatChangelog(body, maxLines)
-    if type(body) ~= 'string' or body == '' then return nil end
-    body = body:gsub('\r\n', '\n')
-    local out = {}
-    for line in body:gmatch('[^\n]+') do
-        local t = line:gsub('^%s+', ''):gsub('%s+$', '')
-        if t ~= '' and not t:find('^%*%*Full Changelog') and not t:find('^%-%-%-+$') then
-            t = t:gsub('^#+%s*', '')
-            t = t:gsub('^[%-%*%+]%s+', '• ')
-            t = t:gsub('%*%*', ''):gsub('`', '')
-            out[#out + 1] = t
-            if #out >= maxLines then
-                out[#out + 1] = '…'
-                break
-            end
+---@param res string
+---@return boolean
+local function includesBridge(res)
+    for _, key in ipairs({ 'shared_script', 'server_script' }) do
+        local n = GetNumResourceMetadata(res, key)
+        for i = 0, n - 1 do
+            local v = GetResourceMetadata(res, key, i)
+            if v and v:find('@cuxial_bridge/init.lua', 1, true) then return true end
         end
     end
-    return out[1] and out or nil
+    return false
 end
 
-local RULE = ('─'):rep(62)
-
----@param resource string
----@param current string
----@param latest string
----@param data table
----@param maxLines integer
-local function printBanner(resource, current, latest, data, maxLines)
-    local sev, col = severity(toParts(current), toParts(latest))
-    print(('%s%s^0'):format(col, RULE))
-    print((' ^7%s   v%s ^7→ %sv%s^7   %s[%s]^0'):format(resource, current, col, latest, col, sev))
-
-    local lines = formatChangelog(data.body, maxLines)
-    if lines then
-        print(('%s%s^0'):format(col, RULE))
-        local title = data.name and data.name ~= '' and data.name or ('v' .. latest)
-        print((' ^7Novedades (%s):'):format(title))
-        for i = 1, #lines do
-            print(('   ^7%s'):format(lines[i]))
-        end
-    end
-
-    print(('%s%s^0'):format(col, RULE))
-    print((' ^7Descarga: ^5%s^0'):format(data.html_url or ('https://github.com/' .. resource)))
-    print(('%s%s^0'):format(col, RULE))
+---@param res string
+---@return boolean
+local function tracked(res)
+    return res:find('^cuxial_') ~= nil or registered[res] == true or includesBridge(res)
 end
 
----@param repository string  'owner/repo'
----@param opts? { changelog?: boolean, maxLines?: integer }
-function Bridge.VersionCheck(repository, opts)
-    if type(repository) ~= 'string' then return end
-    opts = opts or {}
-    local maxLines = tonumber(opts.maxLines) or 10
-    local resource = GetInvokingResource() or GetCurrentResourceName()
+---@param res string
+---@return string|nil
+local function localVersion(res)
+    local raw = GetResourceMetadata(res, 'version', 0)
+    return raw and raw:match('%d+%.%d+%.%d+')
+end
 
-    if checked[resource] then return end
-    checked[resource] = true
+---@param path string
+---@param cb fun(data: table|nil)
+local function fetch(path, cb)
+    PerformHttpRequest(baseUrl() .. path, function(status, response)
+        if status ~= 200 or type(response) ~= 'string' then return cb(nil) end
+        local ok, data = pcall(json.decode, response)
+        cb(ok and type(data) == 'table' and data or nil)
+    end, 'GET', '', { ['User-Agent'] = 'cuxial_bridge' })
+end
 
-    local raw = GetResourceMetadata(resource, 'version', 0)
-    local current = raw and raw:match('%d+%.%d+%.%d+')
-    if not current then
-        return print(("^3[cuxial_bridge]^7 no se pudo leer la versión de ^5%s^7^0"):format(resource))
-    end
-
-    SetTimeout(1000, function()
-        PerformHttpRequest(('https://api.github.com/repos/%s/releases/latest'):format(repository), function(status, response)
-            if status == 403 then
-                return print(('^3[cuxial_bridge]^7 GitHub rate-limit al chequear ^5%s^7^0'):format(resource))
-            end
-            if status ~= 200 or not response then return end
-
-            local ok, data = pcall(json.decode, response)
-            if not ok or type(data) ~= 'table' or data.prerelease or not data.tag_name then return end
-
-            local latest = data.tag_name:match('%d+%.%d+%.%d+')
-            if not latest then return end
-
-            local diff = cmp(toParts(current), toParts(latest))
-            if diff == 0 then return end
-            if diff > 0 then
-                return print(("^2[cuxial_bridge]^7 %s está en ^2v%s^7 (release publicada: v%s, build de desarrollo)^0")
-                    :format(resource, current, latest))
-            end
-
-            if opts.changelog == false then data.body = nil end
-            printBanner(resource, current, latest, data, maxLines)
-        end, 'GET', '', {
-            ['User-Agent'] = resource,
-            ['Accept'] = 'application/vnd.github+json',
-        })
+---@param cb fun(list: table|nil)
+local function getVersions(cb)
+    if cache and os.time() - cachedAt < CACHE_TTL then return cb(cache) end
+    fetch('/api/versions', function(data)
+        if data then cache, cachedAt = data, os.time() end
+        cb(data or cache)
     end)
 end
+
+---@param res string
+---@param list table
+---@return table|nil
+local function compare(res, list)
+    local current = localVersion(res)
+    local entry = list[res] or list[res:lower()]
+    local latest = type(entry) == 'table' and type(entry.version) == 'string' and entry.version:match('%d+%.%d+%.%d+')
+    if not current or not latest then return nil end
+    local diff = cmp(toParts(current), toParts(latest))
+    if diff == 0 then return { res = res, current = current, latest = latest } end
+    return {
+        res = res,
+        current = current,
+        latest = latest,
+        kind = diff > 0 and 'dev' or severity(toParts(current), toParts(latest)),
+    }
+end
+
+---@param row table
+---@param width integer
+---@param prefix? string
+local function printRow(row, width, prefix)
+    local name = row.res .. (' '):rep(width - #row.res)
+    local sev = SEVERITY[row.kind] or { '^9', 'dev' }
+    print(('%s%s  ^9%s^7 › %s%s^7  ^9%s^7'):format(prefix or '  ', name, row.current, sev[1], row.latest, sev[2]))
+    if not row.changes then return end
+    for i = 1, math.min(#row.changes, MAX_DETAILS) do
+        local t = row.changes[i]
+        if type(t) == 'string' then
+            t = t:gsub('^%s+', ''):gsub('%s+$', ''):gsub('^[%-%*%+•]%s*', '')
+            if #t > 52 then t = t:sub(1, 51) .. '…' end
+            print(('    ^9%s^7'):format(t))
+        end
+    end
+end
+
+---@param rows table[]
+---@param cb fun()
+local function loadDetails(rows, cb)
+    if GetConvar('cuxial_versioncheck_details', '0') ~= '1' then return cb() end
+    local pending = 0
+    for i = 1, #rows do
+        if rows[i].kind ~= 'dev' then pending = pending + 1 end
+    end
+    if pending == 0 then return cb() end
+    for i = 1, #rows do
+        local row = rows[i]
+        if row.kind ~= 'dev' then
+            fetch('/api/version/' .. row.res:lower(), function(data)
+                if data and type(data.changes) == 'table' then row.changes = data.changes end
+                pending = pending - 1
+                if pending == 0 then cb() end
+            end)
+        end
+    end
+end
+
+---@param rows table[]
+local function printBlock(rows)
+    local width = 0
+    for i = 1, #rows do width = math.max(width, #rows[i].res) end
+    local outdated = 0
+    for i = 1, #rows do
+        if rows[i].kind ~= 'dev' then outdated = outdated + 1 end
+    end
+    if outdated > 0 then
+        print(('^5[cuxial]^7 Actualizaciones disponibles (%d)'):format(outdated))
+    else
+        print('^5[cuxial]^7 Builds de desarrollo')
+    end
+    for i = 1, #rows do printRow(rows[i], width) end
+    if outdated > 0 then print(FOOTER) end
+end
+
+local function startupCheck()
+    if not enabled() then
+        ready = true
+        return
+    end
+    getVersions(function(list)
+        ready = true
+        if not list then return end
+        local rows, upToDate = {}, 0
+        for i = 0, GetNumResources() - 1 do
+            local res = GetResourceByFindIndex(i)
+            if res and GetResourceState(res) == 'started' and tracked(res) then
+                local row = compare(res, list)
+                if row and row.kind then
+                    rows[#rows + 1] = row
+                elseif row then
+                    upToDate = upToDate + 1
+                end
+            end
+        end
+        if #rows == 0 then
+            if upToDate > 0 and GetConvar('cuxial_versioncheck_quiet', '0') ~= '1' then
+                print(('^5[cuxial]^9 %d scripts al día^7'):format(upToDate))
+            end
+            return
+        end
+        table.sort(rows, function(a, b) return a.res < b.res end)
+        loadDetails(rows, function() printBlock(rows) end)
+    end)
+end
+
+AddEventHandler(REGISTER_EVENT, function(res)
+    if type(res) ~= 'string' then return end
+    registered[res] = true
+end)
+
+AddEventHandler('onResourceStart', function(res)
+    if not ready or res == resource or not enabled() then return end
+    SetTimeout(3000, function()
+        if not tracked(res) then return end
+        getVersions(function(list)
+            if not list then return end
+            local row = compare(res, list)
+            if not row or not row.kind then return end
+            loadDetails({ row }, function()
+                printRow(row, #res, '^5[cuxial]^7 ')
+            end)
+        end)
+    end)
+end)
+
+SetTimeout(FIRST_DELAY, startupCheck)

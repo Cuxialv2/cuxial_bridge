@@ -6,6 +6,14 @@ DB.charId    = GetConvar('cuxial_bridge:charIdColumn', 'citizenid')
 DB.vehTable  = GetConvar('cuxial_bridge:vehTable', 'player_vehicles')
 DB.vehOwner  = GetConvar('cuxial_bridge:vehOwnerColumn', 'citizenid')
 
+---@param query string
+---@param params? table
+---@return table?
+local function first(query, params)
+    local rows = MySQL.query.await(query, params)
+    return rows and rows[1]
+end
+
 local function decode(v)
     if type(v) == 'table' then return v end
     if type(v) ~= 'string' or v == '' then return {} end
@@ -47,7 +55,7 @@ local function identityFromRow(row)
 end
 
 function DB.GetCitizen(id)
-    local row = MySQL.single.await(
+    local row = first(
         'SELECT citizenid, charinfo, job, metadata, police_image, wanted, dangerous FROM players WHERE citizenid = ?',
         { id })
     if not row then return nil end
@@ -87,7 +95,7 @@ function DB.GetWanted(limit)
 end
 
 function DB.GetCitizenFlags(id)
-    local row = MySQL.single.await(
+    local row = first(
         'SELECT wanted, dangerous, police_image FROM players WHERE citizenid = ?', { id }) or {}
     return { wanted = asBool(row.wanted), dangerous = asBool(row.dangerous), image = row.police_image }
 end
@@ -154,7 +162,7 @@ function DB.SearchVehicles(term, limit)
 end
 
 function DB.GetVehicleByPlate(plate)
-    local row = MySQL.single.await([[
+    local row = first([[
         SELECT v.citizenid, v.plate, v.vehicle AS model, v.garage, v.state,
                v.depotprice, v.mods, v.wanted, v.description, v.police_image, p.charinfo
         FROM player_vehicles v LEFT JOIN players p ON p.citizenid = v.citizenid
@@ -171,8 +179,27 @@ function DB.GetVehicleByPlate(plate)
     }
 end
 
+---@param plates string[]
+---@return table<string, string>  plate → citizenid
+function DB.GetVehicleOwners(plates)
+    local out = {}
+    if type(plates) ~= 'table' then return out end
+    local list = {}
+    for _, p in pairs(plates) do
+        if type(p) == 'string' and p ~= '' then list[#list + 1] = p end
+    end
+    for i = 1, #list, 100 do
+        local chunk = { table.unpack(list, i, math.min(i + 99, #list)) }
+        local rows = MySQL.query.await('SELECT plate, citizenid FROM player_vehicles WHERE plate IN (?)', { chunk }) or {}
+        for _, r in ipairs(rows) do
+            if r.plate and r.citizenid then out[r.plate] = r.citizenid end
+        end
+    end
+    return out
+end
+
 function DB.GetVehicleScan(plate)
-    local row = MySQL.single.await([[
+    local row = first([[
         SELECT v.citizenid, v.mods, v.wanted, p.charinfo
         FROM player_vehicles v LEFT JOIN players p ON p.citizenid = v.citizenid
         WHERE v.plate = ?
@@ -205,7 +232,7 @@ function DB.ListPlayers(limit)
 end
 
 function DB.GetMoneyTotals()
-    local row = MySQL.single.await([[SELECT
+    local row = first([[SELECT
         COALESCE(SUM(JSON_EXTRACT(money, '$.bank')), 0) AS bank,
         COALESCE(SUM(JSON_EXTRACT(money, '$.cash')), 0) AS cash,
         COUNT(*) AS players FROM players]])

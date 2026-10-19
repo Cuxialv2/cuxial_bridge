@@ -1,3 +1,30 @@
+## 2.20.0
+
+### Novedades
+- Aviso de versión único al arrancar para todos los scripts Cuxial instalados, sin configurar nada.
+- Una línea por script desactualizado con la versión nueva y su gravedad (mayor, menor o parche).
+- Si todo está al día, una sola línea discreta.
+
+### Configuración
+- `cuxial_versioncheck 0` en `server.cfg` desactiva el aviso.
+- `cuxial_versioncheck_quiet 1` oculta la línea de scripts al día.
+- `cuxial_versioncheck_details 1` muestra hasta 3 novedades por script.
+- `cuxial_versioncheck_url` cambia la dirección de consulta.
+
+### Mejoras
+- Una sola consulta por arranque, sin depender de GitHub ni de sus límites de peticiones.
+- El aviso es más compacto y se lee bien en la consola de txAdmin.
+
+## 2.19.1
+
+### Cambiado
+- En QBox, las consultas de una sola fila de la base de datos usan el mismo método que el resto. El resultado no cambia.
+
+## 2.19.0
+
+### Añadido
+- `Bridge.DB.GetVehicleOwners(plates)` devuelve el dueño de varias matrículas en una sola consulta: `{ [plate] = citizenid }`. Funciona en QBox, QBCore y ESX; las matrículas sin dueño no aparecen.
+
 ## 2.18.0
 
 ### Nuevo

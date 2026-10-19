@@ -181,6 +181,26 @@ function DB.GetVehicleByPlate(plate)
     }
 end
 
+---@param plates string[]
+---@return table<string, string>  plate → identifier
+function DB.GetVehicleOwners(plates)
+    local out = {}
+    if type(plates) ~= 'table' then return out end
+    local list = {}
+    for _, p in pairs(plates) do
+        if type(p) == 'string' and p ~= '' then list[#list + 1] = p end
+    end
+    local sql = ('SELECT plate, %s AS ownerId FROM %s WHERE plate IN (?)'):format(DB.vehOwner, DB.vehTable)
+    for i = 1, #list, 100 do
+        local chunk = { table.unpack(list, i, math.min(i + 99, #list)) }
+        local rows = MySQL.query.await(sql, { chunk }) or {}
+        for _, r in ipairs(rows) do
+            if r.plate and r.ownerId then out[r.plate] = r.ownerId end
+        end
+    end
+    return out
+end
+
 function DB.GetVehicleScan(plate)
     local row = (MySQL.query.await(([[
         SELECT v.%s AS ownerId, v.vehicle, v.wanted, u.firstname, u.lastname

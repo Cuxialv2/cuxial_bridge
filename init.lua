@@ -50,9 +50,6 @@ end
 if GetCurrentResourceName() == Bridge._resource then
     print(('[cuxial_bridge] listo framework=%s inventario=%s target=%s contexto=%s')
         :format(Bridge.framework, Bridge.inventory, Bridge.target, context))
-    if context == 'server' and Bridge.VersionCheck then
-        Bridge.VersionCheck('Cuxialv2/cuxial_bridge')
-    end
 end
 
 return Bridge

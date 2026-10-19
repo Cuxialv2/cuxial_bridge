@@ -34,8 +34,32 @@ shared_scripts {
 local player = Bridge.GetPlayer(src)
 Bridge.AddMoney(src, 'bank', 500, 'reason')
 Bridge.Target.addLocalEntity(entity, options)
-Bridge.VersionCheck('owner/repo')
+Bridge.VersionCheck()
 ```
+
+## Aviso de versión
+
+Unos 15 s después de arrancar, `cuxial_bridge` hace una sola consulta (`GET <base>/api/versions`) y compara la versión de cada recurso arrancado que empieza por `cuxial_` o incluye el bridge. Pinta un único bloque:
+
+```
+[cuxial] Actualizaciones disponibles (2)
+  cuxial_admin    1.0.0 › 1.1.0  menor
+  cuxial_garages  2.0.5 › 2.0.6  parche
+  Descarga en portal.cfx.re · novedades en docs.cuxial.com
+```
+
+Si todo está al día, una línea: `[cuxial] 14 scripts al día`. Una build local mayor que la publicada sale en el mismo bloque marcada `dev`. Al reiniciar un recurso Cuxial más tarde se muestra una sola línea para él (lista en caché, refresco cada 6 h). Sin conexión o sin registro no muestra nada.
+
+`Bridge.VersionCheck(repository?, opts?)` se mantiene por compatibilidad: solo añade el recurso a la lista y no imprime nada por su cuenta.
+
+```cfg
+set cuxial_versioncheck 0                           # desactiva el aviso
+set cuxial_versioncheck_quiet 1                     # sin la línea «al día»
+set cuxial_versioncheck_details 1                   # hasta 3 novedades por script
+set cuxial_versioncheck_url "https://ejemplo.com"   # base propia
+```
+
+La consulta es un `GET` sin datos del servidor.
 
 ## Soportados
 
