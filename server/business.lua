@@ -252,6 +252,220 @@ function Bridge.Jobs.Remove(cid, name)
     return ok and rawequal(done, true)
 end
 
+---@param name string
+---@return { grade: integer, name: string, isboss: boolean }[]  de menor a mayor
+function Bridge.Jobs.Grades(name)
+    local ok, info = pcall(Bridge.GetJobInfo, name)
+    if not ok or type(info) ~= 'table' or type(info.grades) ~= 'table' then return {} end
+    local out = {}
+    for k, g in pairs(info.grades) do
+        local level = math.tointeger(tonumber(k)) or (type(g) == 'table' and math.tointeger(tonumber(g.grade)))
+        if level and type(g) == 'table' then
+            out[#out + 1] = { grade = level, name = tostring(g.label or g.name or level), isboss = g.isboss == true }
+        end
+    end
+    table.sort(out, function(a, b) return a.grade < b.grade end)
+    return out
+end
+
+---@param name string
+---@param grade integer
+---@return boolean
+local function gradeExists(name, grade)
+    for _, g in ipairs(Bridge.Jobs.Grades(name)) do
+        if g.grade == grade then return true end
+    end
+    return false
+end
+
+---@param cid string
+---@param name string
+---@return integer?
+local function gradeQbox(cid, name)
+    local src = sourceOf(cid)
+    if src then
+        local player = exports['qbx_core']:GetPlayer(src)
+        local jobs = player and player.PlayerData and player.PlayerData.jobs or {}
+        return math.tointeger(tonumber(jobs[name]))
+    end
+    if not hasSql() then return nil end
+    local grade = MySQL.scalar.await(
+        "SELECT grade FROM player_groups WHERE citizenid = ? AND `group` = ? AND type = 'job' LIMIT 1", { cid, name })
+    return math.tointeger(tonumber(grade))
+end
+
+---@param cid string
+---@param name string
+---@return integer?
+local function gradeQbcore(cid, name)
+    local src = sourceOf(cid)
+    if src then
+        local player = exports['qb-core']:GetCoreObject().Functions.GetPlayer(src)
+        local job = player and player.PlayerData.job or {}
+        if job.name ~= name then return nil end
+        return math.tointeger(tonumber((job.grade or {}).level))
+    end
+    if not hasSql() then return nil end
+    local raw = MySQL.scalar.await('SELECT job FROM players WHERE citizenid = ? LIMIT 1', { cid })
+    local job = decode(raw) or {}
+    if job.name ~= name then return nil end
+    return math.tointeger(tonumber((job.grade or {}).level))
+end
+
+---@param cid string
+---@param name string
+---@return integer?
+local function gradeEsx(cid, name)
+    local esx = exports.es_extended:getSharedObject()
+    local x = esx.GetPlayerFromIdentifier(cid)
+    if x then
+        local job = x.getJob and x.getJob() or x.job or {}
+        if job.name ~= name then return nil end
+        return math.tointeger(tonumber(job.grade))
+    end
+    if not hasSql() then return nil end
+    local rows = MySQL.query.await('SELECT job, job_grade FROM users WHERE identifier = ? LIMIT 1', { cid }) or {}
+    local row = rows[1]
+    if not row or row.job ~= name then return nil end
+    return math.tointeger(tonumber(row.job_grade))
+end
+
+---@param cid string
+---@param name string
+---@return integer?  grado en ese trabajo (conectado o no); nil si no es miembro
+function Bridge.Jobs.Grade(cid, name)
+    if type(cid) ~= 'string' or cid == '' or type(name) ~= 'string' or name == '' then return nil end
+    local ok, grade = pcall(function()
+        if Bridge.framework == 'qbox' then return gradeQbox(cid, name) end
+        if Bridge.framework == 'qbcore' then return gradeQbcore(cid, name) end
+        if Bridge.framework == 'esx' then return gradeEsx(cid, name) end
+        return nil
+    end)
+    return ok and grade or nil
+end
+
+---@param cid string
+---@param name string
+---@param grade integer
+---@return boolean ok
+---@return string? err
+local function setQbcore(cid, name, grade)
+    local core = exports['qb-core']:GetCoreObject()
+    local src = sourceOf(cid)
+    if src then
+        local player = core.Functions.GetPlayer(src)
+        if not player then return false, 'not_found' end
+        return player.Functions.SetJob(name, grade) ~= false, nil
+    end
+    if not hasSql() then return false, 'not_found' end
+    local def = (core.Shared.Jobs or {})[name] or {}
+    local g = (def.grades or {})[tostring(grade)] or (def.grades or {})[grade] or {}
+    local job = {
+        name = name, label = def.label or name, payment = g.payment or 0, onduty = def.defaultDuty == true,
+        isboss = g.isboss == true, type = def.type, grade = { name = g.name or tostring(grade), level = grade },
+    }
+    local done = MySQL.update.await('UPDATE players SET job = ? WHERE citizenid = ?', { json.encode(job), cid })
+    return (tonumber(done) or 0) > 0, 'not_found'
+end
+
+---@param cid string
+---@param name string
+---@param grade integer
+---@return boolean ok
+---@return string? err
+local function setEsx(cid, name, grade)
+    local esx = exports.es_extended:getSharedObject()
+    local x = esx.GetPlayerFromIdentifier(cid)
+    if x then
+        x.setJob(name, grade)
+        return true
+    end
+    if not hasSql() then return false, 'not_found' end
+    local done = MySQL.update.await('UPDATE users SET job = ?, job_grade = ? WHERE identifier = ?', { name, grade, cid })
+    return (tonumber(done) or 0) > 0, 'not_found'
+end
+
+---@param res any
+---@return string
+local function qbxError(res)
+    local code = type(res) == 'table' and res.code or nil
+    if code == 'max_jobs' then return 'max_jobs' end
+    if code == 'player_not_found' then return 'not_found' end
+    return 'framework'
+end
+
+---@param cid string
+---@param name string
+---@param grade integer
+---@param primary boolean
+---@return boolean ok
+---@return string? err
+local function setQbox(cid, name, grade, primary)
+    local core = exports['qbx_core']
+    local ok, res
+    if primary then
+        ok, res = core:SetJob(cid, name, grade)
+    else
+        ok, res = core:AddPlayerToJob(cid, name, grade)
+    end
+    if ok then return true end
+    return false, qbxError(res)
+end
+
+---@param cid string
+---@param name string
+---@param grade integer
+---@return string? err
+local function checkTarget(cid, name, grade)
+    if type(cid) ~= 'string' or cid == '' or type(name) ~= 'string' or name == '' then return 'params' end
+    if math.type(grade) ~= 'integer' then return 'params' end
+    if not Bridge.Jobs.Exists(name) then return 'no_job' end
+    if not gradeExists(name, grade) then return 'no_grade' end
+    return nil
+end
+
+---@param cid string  citizenid / identifier (conectado o no)
+---@param name string  trabajo
+---@param grade integer
+---@return boolean ok
+---@return string? err  'params'|'no_job'|'no_grade'|'already'|'not_found'|'max_jobs'|'framework'
+function Bridge.Jobs.Hire(cid, name, grade)
+    local bad = checkTarget(cid, name, grade)
+    if bad then return false, bad end
+    if Bridge.Jobs.Grade(cid, name) ~= nil then return false, 'already' end
+    local ok, done, err = pcall(function()
+        if Bridge.framework == 'qbox' then return setQbox(cid, name, grade, true) end
+        if Bridge.framework == 'qbcore' then return setQbcore(cid, name, grade) end
+        if Bridge.framework == 'esx' then return setEsx(cid, name, grade) end
+        return false, 'framework'
+    end)
+    if not ok then return false, 'framework' end
+    if done then return true end
+    return false, err or 'framework'
+end
+
+---@param cid string  citizenid / identifier (conectado o no)
+---@param name string  solo cambia si ya es miembro de ese trabajo
+---@param grade integer
+---@return boolean ok
+---@return string? err  'params'|'no_job'|'no_grade'|'not_member'|'not_found'|'framework'
+function Bridge.Jobs.SetGrade(cid, name, grade)
+    local bad = checkTarget(cid, name, grade)
+    if bad then return false, bad end
+    local current = Bridge.Jobs.Grade(cid, name)
+    if current == nil then return false, 'not_member' end
+    if current == grade then return true end
+    local ok, done, err = pcall(function()
+        if Bridge.framework == 'qbox' then return setQbox(cid, name, grade, false) end
+        if Bridge.framework == 'qbcore' then return setQbcore(cid, name, grade) end
+        if Bridge.framework == 'esx' then return setEsx(cid, name, grade) end
+        return false, 'framework'
+    end)
+    if not ok then return false, 'framework' end
+    if done then return true end
+    return false, err or 'framework'
+end
+
 ---@return string?  sistema de banca de sociedades disponible
 function Bridge.Society.Provider()
     if started('cuxial_banking') then return 'cuxial_banking' end

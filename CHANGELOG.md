@@ -1,3 +1,36 @@
+## 2.24.0
+
+### Novedades
+- `Bridge.Anim` en el cliente: un recurso bloquea las animaciones del jugador (emotes, menú, cancelar, manos arriba, brazos cruzados, señalar, tumbarse, agacharse) mientras dura una escena suya, con un motivo por cada escena.
+- Mientras haya bloqueo, el móvil (sd-phone) queda desactivado y se reactiva al soltarlo; si otro script ya lo había desactivado, no se toca.
+- sleepless_interact oculta las opciones con animación mientras haya bloqueo.
+- Varios recursos y motivos a la vez: el jugador vuelve a poder animarse cuando se sueltan todos. Si el recurso se para, sus bloqueos se sueltan solos; si `cuxial_emotes` reinicia, se vuelven a aplicar.
+
+## 2.23.0
+
+### Novedades
+- Gestión de miembros de un trabajo con el jugador conectado o desconectado: `Bridge.Jobs.Hire`, `SetGrade`, `Grade` y `Grades`, junto a `Members` y `Remove`.
+- Pensado para paneles de jefe (contratar, despedir y cambiar de grado) que sirvan para cualquier trabajo.
+
+## 2.22.1
+
+### Correcciones
+- Las apps y pantallas de `Bridge.Screens` vuelven a registrarse de verdad cuando `cuxial_screens` arranca después o se reinicia (antes se perdían en silencio).
+
+## 2.22.0
+
+### Novedades
+- `Bridge.Screens.registerScreen` y `removeScreen`: un recurso da de alta sus pantallas de `cuxial_screens` (por ejemplo, el monitor de una oficina) y se vuelven a registrar solas si `cuxial_screens` reinicia.
+
+## 2.21.0
+
+### Novedades
+- `Bridge.Screens` para las apps de Cuxial OS (`cuxial_screens`): registrar una app desde cualquier recurso, recibir sus llamadas ya validadas por la sesión de pantalla, enviarle datos y avisos al jugador que la tiene abierta.
+- En el cliente, abrir o cerrar una pantalla desde otro recurso (por ejemplo, al sentarse en una silla).
+
+### Mejoras
+- Si `cuxial_screens` arranca después o se reinicia, las apps se vuelven a registrar solas.
+
 ## 2.20.0
 
 ### Novedades

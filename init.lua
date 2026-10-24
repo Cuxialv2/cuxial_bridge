@@ -42,9 +42,12 @@ if context == 'server' then
     loadModule('server/media.lua', true)
     loadModule('server/phone.lua')
     loadModule('server/business.lua', true)
+    loadModule('server/screens.lua', true)
 else
     loadModule('client/target/' .. Bridge.target .. '.lua')
     loadModule('client/media.lua', true)
+    loadModule('client/screens.lua', true)
+    loadModule('client/anim.lua', true)
 end
 
 if GetCurrentResourceName() == Bridge._resource then
